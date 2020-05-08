@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(whole_body_ik)
 
+add_compile_options(-std=c++11)
 add_definitions("-DBOOST_MPL_LIMIT_LIST_SIZE=30")
 
 find_package(catkin REQUIRED COMPONENTS
