@@ -29,8 +29,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef __ROBOTDYN_H__
-#define __ROBOTDYN_H__
+#ifndef __PINWRAP_H__
+#define __PINWRAP_H__
 #include <pinocchio/parsers/urdf.hpp>
 #include <pinocchio/algorithm/kinematics.hpp>
 #include <pinocchio/algorithm/jacobian.hpp>
@@ -44,10 +44,8 @@
 #include <vector>
 #include <map>
 #include <qpmad/solver.h>
-
 #include <iostream>
 #include <Eigen/Dense>
-//#include <Eigen/Sparse>
 #include <Eigen/Cholesky>
 
 using namespace std;
@@ -61,13 +59,26 @@ private:
     std::vector<std::string> jnames_;
     Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
     bool has_floating_base_;
-    double lm_damping;
-    double dt;
+    qpmad::Solver solver;
+    qpmad::SolverParameters solver_params;
+    double lm_damping = 1e-3;
+    double gainC = 0.3;
+    double dt = 0.01;
     Eigen::MatrixXd I;
-
+    Eigen::VectorXd qdotd,qdotd_;
+    Eigen::MatrixXd H;
+    Eigen::VectorXd h;
+    Eigen::MatrixXd A;
+    Eigen::VectorXd Alb;
+    Eigen::VectorXd Aub;
+    Eigen::VectorXd lb;
+    Eigen::VectorXd ub;
+    Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
+    Eigen::MatrixXd L_choleksy;
+    bool taskInit = false;
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
+    Eigen::VectorXd qq;
     pin_wrapper(const std::string &model_name,
              const bool &has_floating_base, const bool &verbose = false)
     {
@@ -83,18 +94,26 @@ public:
         data_ = new pinocchio::Data(*pmodel_);
 
         jnames_.clear();
-        jnames_ = pmodel_->names;
+        int names_size = pmodel_->names.size();
+        jnames_.reserve(names_size);
 
-        // Remove the first joint "universe", if it exists
-        if (jnames_[0].compare("universe") == 0)
+        for (int i = 0; i < names_size; i++)
         {
-            jnames_.erase(jnames_.begin());
+            const std::string &jname = pmodel_->names[i];
+            //Do not insert "universe" joint
+            if (jname.compare("universe") != 0)
+            {
+                jnames_.push_back(jname);
+            }
         }
 
         qmin_.resize(jnames_.size());
         qmax_.resize(jnames_.size());
         dqmax_.resize(jnames_.size());
         qn.resize(jnames_.size());
+        qn.setZero();
+        qq.resize(jnames_.size());
+        qq.setZero();
         qmin_ = pmodel_->lowerPositionLimit;
         qmax_ = pmodel_->upperPositionLimit;
         dqmax_ = pmodel_->velocityLimit;
@@ -112,9 +131,8 @@ public:
             dqmax_ = tmp.tail(jnames_.size());
         }
 
-        lm_damping = 1e-3;
-        dt = 0.01;
-        //Handle Continuous joints 
+        // Continuous joints are given spurious values par default, set those values
+        // to arbitrary ones
         for (int i = 0; i < qmin_.size(); ++i)
         {
             double d = qmax_[i] - qmin_[i];
@@ -126,12 +144,31 @@ public:
                 dqmax_[i] = 200.0;
             }
         }
+
+
+        I.setIdentity(pmodel_->nv, pmodel_->nv);
+        H.setZero(pmodel_->nv, pmodel_->nv);
+        h.setZero(pmodel_->nv);
+        qdotd.resize(pmodel_->nv);
+        qdotd.setZero();
+        qdotd_.resize(pmodel_->nv);
+        qdotd_.setZero();
+
+        //Joint Constraints
+        A.resize(2 * pmodel_->nv, pmodel_->nv);
+        Alb.resize(2 * pmodel_->nv);
+        Aub.resize(2 * pmodel_->nv);
+        lb.resize(0);
+        ub.resize(0);
+        A.setIdentity();
+        Alb.head(pmodel_->nv) = -jointVelocityLimits();
+        Aub.head(pmodel_->nv) = jointVelocityLimits();
+        solver_params.hessian_type_ = qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
+
         std::cout << "Joint Names " << std::endl;
         printJointNames();
-        printJointLimits();
         std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
         std::cout << "Model loaded: " << model_name << std::endl;
-
     }
 
     int ndof()
@@ -150,10 +187,13 @@ public:
             return pmodel_->nq;
     }
 
-    //void updateJointConfig(const Eigen::VectorXd& q)
 
-    void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std)
+    void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std = 0)
     {
+
+        H.setZero(pmodel_->nv, pmodel_->nv);
+        h.setZero(pmodel_->nv);
+        taskInit = false;
         mapJointNamesIDs(qmap, qdotmap);
         if (has_floating_base_)
         {
@@ -166,17 +206,17 @@ public:
             qpin[5] = q_[6];
             qpin[6] = q_[3];
             //pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
-            pinocchio::framesForwardKinematics(*pmodel_, *data_, qpin);
+            pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
             pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
         }
         else
         {
-            //pinocchio::forwardKinematics(*pmodel_, *data_, q_);
-            pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+            pinocchio::forwardKinematics(*pmodel_, *data_, q_);
             pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
         }
         qn.setOnes();
         qn *= joint_std;
+
     }
 
     Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
@@ -188,15 +228,33 @@ public:
         return angularJacobian(frame_name) * qn;
     }
 
+    //TODO
     void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
     {
-        q_.resize(jnames_.size());
-        qdot_.resize(jnames_.size());
-
+        q_.resize(pmodel_->nq);
+        qdot_.resize(pmodel_->nv);
+        qq.resize(jnames_.size());
         for (int i = 0; i < jnames_.size(); i++)
         {
-            q_[i] = qmap[jnames_[i]];
-            qdot_[i] = qdotmap[jnames_[i]];
+            int jidx = pmodel_->getJointId(jnames_[i]);
+            int qidx = pmodel_->idx_qs[jidx];
+            int vidx = pmodel_->idx_vs[jidx];
+
+            //this value is equal to 2 for continuous joints
+            if (pmodel_->nqs[jidx] == 2)
+            {
+                q_[qidx] = cos(qmap[jnames_[i]]);
+                q_[qidx + 1] = sin(qmap[jnames_[i]]);
+                qdot_[vidx] = qdotmap[jnames_[i]];
+                qq[jidx] = qmap[jnames_[i]];
+            }
+            else
+            {
+                q_[qidx] = qmap[jnames_[i]];
+                qdot_[vidx] = qdotmap[jnames_[i]];
+                qq[jidx] = qmap[jnames_[i]];
+
+            }
         }
     }
 
@@ -207,7 +265,6 @@ public:
             pinocchio::Data::Matrix6x J(6, pmodel_->nv);
             J.fill(0);
             // Jacobian in pinocchio::LOCAL (link) frame
-
             pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
 
             pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
@@ -322,7 +379,6 @@ public:
         pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
         try
         {
-
             if (has_floating_base_)
             {
                 // Structure of J is:
@@ -371,7 +427,6 @@ public:
 
         try
         {
-
             if (has_floating_base_)
             {
 
@@ -408,94 +463,6 @@ public:
             return Eigen::MatrixXd::Zero(3, ndofActuated());
         }
     }
-
-
-void addTask(Eigen::MatrixXd& H, Eigen::VectorXd& h, Eigen::Vector3d vdes, Eigen::MatrixXd Jac, Eigen::VectorXd joint_vel, double weight, double gain)
-{
-    Eigen::Vector3d res = vdes - Jac * joint_vel;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, res.norm()) * I;
-    h += (-weight * gain * vdes.transpose() * Jac).transpose();
-}
-void setdt(double dt_)
-{
-    dt=dt_;
-}
-
-
-Eigen::VectorXd inverseKinematics()
-{
-
-
-    Eigen::VectorXd         qq,qd;
-    Eigen::MatrixXd         H;
-    Eigen::VectorXd         h;
-    Eigen::MatrixXd         A;
-    Eigen::VectorXd         Alb;
-    Eigen::VectorXd         Aub;
-    Eigen::VectorXd         lb;
-    Eigen::VectorXd         ub;
-
-
-
-    qpmad::MatrixIndex size = pmodel_->nv;
-    double weight0 = 1.0;
-    double gain0 = 0.5;
-    double gainC = 0.3;
-    I.setIdentity(size,size);
-    H.setZero(size, size);
-    h.setZero(size);
-    qq.resize(size);
-    qd.resize(size);
-    qq.setZero();
-
-    A.resize(2*size, size);
-    Alb.resize(2*size);
-    Aub.resize(2*size);
-    lb.resize(0);
-    ub.resize(0);
-    A.setIdentity();
-    Alb.head(size) = -jointVelocityLimits();
-    Aub.head(size) = jointVelocityLimits();
-    Alb.tail(size) = gainC * (jointMinAngularLimits()-qq)/dt;
-    Aub.tail(size) = gainC * (jointMaxAngularLimits()-qq)/dt;
-
-    pinocchio::forwardKinematics(*pmodel_, *data_, qq);
-    pinocchio::computeJointJacobians(*pmodel_, *data_, qq);
-
-  
-
-    Eigen::Vector3d vdes = Eigen::Vector3d(10000,0,0.1);
-    Eigen::MatrixXd Jac;
-    Jac.resize(3,size);
-    Jac = linearJacobian("l_ankle");
-    Eigen::Vector3d res = vdes - Jac*qq;
-    addTask(H,h, vdes, Jac, qq, weight0,  gain0);
-
-
-
-    qd = H.colPivHouseholderQr().solve(-h);
-    std::cout<<"opt "<<qd<<std::endl;
-    std::cout<<"-----"<<std::endl;
-
-    
-
-
-    qpmad::Solver               solver;
-    qpmad::SolverParameters solver_params;
-
-    Eigen::LLT <Eigen::MatrixXd,Eigen::Lower> cholesky;
-    cholesky.compute(H);
-    qd = cholesky.solve(h);
-    Eigen::MatrixXd L = Eigen::MatrixXd(cholesky.matrixL());
-  
-
-    solver_params.hessian_type_= qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
-    qpmad::Solver::ReturnStatus status = solver.solve(qd, L, h, lb, ub, A, Alb, Aub,solver_params);
-    
-    return qd;
-}
-
-
 
     Eigen::VectorXd comPosition()
     {
@@ -579,8 +546,9 @@ Eigen::VectorXd inverseKinematics()
     void printJointNames()
         const
     {
-        for (int i = 0; i < jnames_.size(); ++i)
-            std::cout << jnames_[i] << std::endl;
+        // for (int i=0; i<jnames_.size(); ++i)
+        //     std::cout << jnames_[i] <<std::endl;
+        std::cout << *pmodel_ << std::endl;
     }
     void printJointLimits()
         const
@@ -650,6 +618,91 @@ Eigen::VectorXd inverseKinematics()
         res(2, 2) = 2.0 * (q(0) * q(0) + q(3) * q(3)) - 1.0;
 
         return res;
+    }
+
+
+
+
+    void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain)
+    {
+        if(task_type == 0)
+        {   
+            taskInit = true;
+            Eigen::MatrixXd Jac;
+            Jac.resize(3, pmodel_->nv);
+            Jac = linearJacobian(frame_name);
+            addTask(vdes, Jac, weight, gain);
+        }
+        else if(task_type == 1)
+        {
+            taskInit = true;
+            Eigen::MatrixXd Jac;
+            Jac.resize(3, pmodel_->nv);
+            Jac = angularJacobian(frame_name);
+            addTask(vdes, Jac, weight, gain);
+        }
+        else if(task_type == 2)
+        {
+            taskInit = true;
+            Eigen::MatrixXd Jac;
+            Jac.resize(3, pmodel_->nv);
+            Jac = comJacobian();
+            addTask(vdes, Jac, weight, gain);
+        }
+        else
+        {
+            taskInit = false;
+            std::cout<<"Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM"<<std::endl;
+            return;
+        }
+    }
+
+    void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac,  double weight, double gain)
+    {
+        Eigen::Vector3d res = vdes - Jac * qdot_;
+        H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, res.norm()) * I;
+        h += (-weight * gain * vdes.transpose() * Jac).transpose();
+    }
+    void setdt(double dt_)
+    {
+        dt = dt_;
+    }
+    void setContraintGain(double gainC_)
+    {
+        gainC = gainC_;
+    }
+    Eigen::VectorXd inverseKinematics()
+    {
+
+        if(taskInit)
+        {
+            Alb.tail(pmodel_->nv) = gainC * (jointMinAngularLimits() - qq) / dt;
+            Aub.tail(pmodel_->nv) = gainC * (jointMaxAngularLimits() - qq) / dt;
+
+    
+            //qdotd_ = H.colPivHouseholderQr().solve(-h);
+            //std::cout << "Unconstrained Optimal Solution" << qdotd_ << std::endl;
+            //std::cout << "-----" << std::endl;
+
+
+            cholesky.compute(H);
+            qdotd_ = cholesky.solve(-h);
+            std::cout << "Unconstrained Optimal Solution" << qdotd_ << std::endl;
+            std::cout << "-----" << std::endl;
+            L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
+            qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
+            std::cout << "Constrained Optimal Solution" <<qdotd<< std::endl;
+            std::cout << "-----" << std::endl;
+
+            return qdotd;
+        }
+        else
+        {
+            std::cout<<"No Tasks Defined to solve for"<<std::endl;
+            qdotd.setZero(pmodel_->nv);
+            return qdotd;
+        }
+        
     }
 };
 #endif
