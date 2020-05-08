@@ -89,7 +89,7 @@ int main(int argc, char **argv)
 
     //Define Tasks
     //Left Foot Swing Task
-    Eigen::Vector3d vdes0 = Eigen::Vector3d(10000, 0, 0.1);
+    Eigen::Vector3d vdes0 = Eigen::Vector3d(10, 10, 10);
     double weight0 = 1;
     double gain0 = 0.5;
     int task_type0 = 0; //0 for linear velocity/ 1 for angular velocity / 2 for CoM
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 
     //CoM task
     int task_type1 = 2; //0 for linear velocity/ 1 for angular velocity / 2 for CoM
-    Eigen::Vector3d vdes1 = Eigen::Vector3d(0.01, 0.01, 0.01);
+    Eigen::Vector3d vdes1 = Eigen::Vector3d(0.01, 10, 0.01);
     double weight1 = 1;
     double gain1 = 0.5;
     pin->setTask("CoM", task_type1, vdes1,  weight1,  gain1);

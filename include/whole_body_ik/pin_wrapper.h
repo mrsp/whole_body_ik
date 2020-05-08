@@ -62,7 +62,7 @@ private:
     qpmad::Solver solver;
     qpmad::SolverParameters solver_params;
     double lm_damping = 1e-3;
-    double gainC = 0.3;
+    double gainC = 0.35;
     double dt = 0.01;
     Eigen::MatrixXd I;
     Eigen::VectorXd qdotd,qdotd_;
@@ -155,14 +155,16 @@ public:
         qdotd_.setZero();
 
         //Joint Constraints
-        A.resize(2 * pmodel_->nv, pmodel_->nv);
-        Alb.resize(2 * pmodel_->nv);
-        Aub.resize(2 * pmodel_->nv);
-        lb.resize(0);
-        ub.resize(0);
+        A.resize( pmodel_->nv, pmodel_->nv);
         A.setIdentity();
-        Alb.head(pmodel_->nv) = -jointVelocityLimits();
-        Aub.head(pmodel_->nv) = jointVelocityLimits();
+        Alb.resize(pmodel_->nv);
+        Aub.resize(pmodel_->nv);
+        lb.resize(pmodel_->nv);
+        ub.resize(pmodel_->nv);
+ 
+
+        lb = -jointVelocityLimits();
+        ub = jointVelocityLimits();
         solver_params.hessian_type_ = qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
 
         std::cout << "Joint Names " << std::endl;
@@ -205,14 +207,17 @@ public:
             qpin[4] = q_[5];
             qpin[5] = q_[6];
             qpin[6] = q_[3];
+
             //pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
-            pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
             pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
+            pinocchio::framesForwardKinematics(*pmodel_, *data_, qpin);
+
         }
         else
         {
-            pinocchio::forwardKinematics(*pmodel_, *data_, q_);
+            //pinocchio::forwardKinematics(*pmodel_, *data_, q_);
             pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
+            pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
         }
         qn.setOnes();
         qn *= joint_std;
@@ -676,10 +681,15 @@ public:
 
         if(taskInit)
         {
-            Alb.tail(pmodel_->nv) = gainC * (jointMinAngularLimits() - qq) / dt;
-            Aub.tail(pmodel_->nv) = gainC * (jointMaxAngularLimits() - qq) / dt;
-
+            Alb = gainC * (jointMinAngularLimits() - qq) / dt;
+            Aub = gainC * (jointMaxAngularLimits() - qq) / dt;
     
+            std::cout << "--Alb--" << std::endl;
+            std::cout << Alb << std::endl;
+            std::cout << "--Aub---" << std::endl;
+            std::cout << Aub << std::endl;
+            std::cout << "-----" << std::endl;
+
             //qdotd_ = H.colPivHouseholderQr().solve(-h);
             //std::cout << "Unconstrained Optimal Solution" << qdotd_ << std::endl;
             //std::cout << "-----" << std::endl;
