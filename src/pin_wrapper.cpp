@@ -101,7 +101,6 @@ pin_wrapper::pin_wrapper(const std::string &model_name,const bool &has_floating_
     lb.resize(pmodel_->nv);
     ub.resize(pmodel_->nv);
 
-
     lb = -jointVelocityLimits();
     ub = jointVelocityLimits();
     solver_params.hessian_type_ = qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
@@ -112,15 +111,17 @@ pin_wrapper::pin_wrapper(const std::string &model_name,const bool &has_floating_
     std::cout << "Model loaded: " << model_name << std::endl;
 }
 
-
-
-void pin_wrapper::updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std )
+void pin_wrapper::updateJointConfig(std::string jnames_[],
+                                    double qvec[],
+                                    double qdotvec[],
+                                    int size,
+                                    double joint_std)
 {    
     H.setZero(pmodel_->nv, pmodel_->nv);
     h.setZero(pmodel_->nv);
     taskInit = false;
     
-    mapJointNamesIDs(qmap, qdotmap);    
+    mapJointNamesIDs(jnames_, qvec,qdotvec,size);    
     if (has_floating_base_)
     {
         // Change quaternion order: in Pinocchio it is
@@ -151,13 +152,15 @@ void pin_wrapper::updateJointConfig(std::map<std::string, double> qmap, std::map
     
 }
 
-
-void pin_wrapper::mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap)
+void pin_wrapper::mapJointNamesIDs(const std::string jnames_[],
+                                   const double qvec[],
+                                   const double qdotvec[],
+                                   int size)
 {
     q_.resize(pmodel_->nq);
     qdot_.resize(pmodel_->nv);
     qq.resize(pmodel_->nv);
-    for (int i = 0; i < jnames_.size(); i++)
+    for (int i = 0; i < size; i++)
     {
         int jidx = pmodel_->getJointId(jnames_[i]);
         int qidx = pmodel_->idx_qs[jidx];
@@ -166,19 +169,42 @@ void pin_wrapper::mapJointNamesIDs(std::map<std::string, double> qmap, std::map<
         //this value is equal to 2 for continuous joints
         if (pmodel_->nqs[jidx] == 2)
         {
-            q_[qidx] = cos(qmap[jnames_[i]]);
-            q_[qidx + 1] = sin(qmap[jnames_[i]]);
-            qdot_[vidx] = qdotmap[jnames_[i]];
-            qq[vidx] = qmap[jnames_[i]];
+            q_[qidx] = cos(qvec[i]);
+            q_[qidx + 1] = sin(qvec[i]);
+            qdot_[vidx] = qdotvec[i];
+            qq[vidx] = qvec[i];
         }
         else
         {
-            q_[qidx] = qmap[jnames_[i]];
-            qdot_[vidx] = qdotmap[jnames_[i]];
-            qq[vidx] = qmap[jnames_[i]];
+            q_[qidx] = qvec[i];
+            qdot_[vidx] = qdotvec[i];
+            qq[vidx] = qvec[i];
 
         }
     }
+}
+
+void pin_wrapper::getJointData(const std::string jnames_[],
+                               double qvec[],
+                               double qdotvec[],
+                               int size)
+{
+    for (int i = 0; i < size; i++)
+    {
+        int jidx = pmodel_->getJointId(jnames_[i]);
+        int vidx = pmodel_->idx_vs[jidx];
+        
+        qvec[i]=qq[vidx];
+        qdotvec[i] = qdot_[vidx];
+    }
+}
+
+double pin_wrapper::getQq(const std::string &jname) const
+{
+    int jidx = pmodel_->getJointId(jname);
+    int vidx = pmodel_->idx_vs[jidx];
+    
+    return qq[vidx];
 }
 
 Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)

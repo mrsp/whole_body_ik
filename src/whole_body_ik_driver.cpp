@@ -65,29 +65,20 @@ int main(int argc, char **argv)
                                    -0.02611994743347168, 0.2476000189781189 };
     double joint_velocities[26] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
    
-
-
-
-    int i=0;
-    std::map<std::string, double> joint_state_pos_map, joint_state_vel_map;
-    while (i < 26)
-    {
-        joint_state_pos_map[joint_names[i]] = joint_positions[i];
-        joint_state_vel_map[joint_names[i]] = joint_velocities[i];
-        i++;
-    }
-
-    
     //Update Joint_states in Pinocchio
-    pin->updateJointConfig(joint_state_pos_map, joint_state_vel_map);
+    pin->updateJointConfig(joint_names,joint_positions,joint_velocities,26);
+    /*
+    pin->getJointData(joint_names,joint_positions,joint_velocities,26);
+    */
     
-       
-    
+    int i=0;
     LeakyIntegrator li[26];
     while(i<26)
     {
         li[i].rate(10.0);
-        li[i].setInitialState(pin->qq[i]);
+        //li[i].setInitialState(pin->qq[i]);
+        double qq=pin->getQq(joint_names[i]); 
+        li[i].setInitialState(qq);
         i++;
     }
 

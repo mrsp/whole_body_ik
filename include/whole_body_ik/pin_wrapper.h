@@ -53,144 +53,158 @@ using namespace std;
 class pin_wrapper
 {
 
-private:
-    pinocchio::Model *pmodel_;
-    pinocchio::Data *data_;
-    std::vector<std::string> jnames_;
-    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
-    bool has_floating_base_;
-    qpmad::Solver solver;
-    qpmad::SolverParameters solver_params;
-    double lm_damping = 1e-3;
-    double gainC = 0.35;
-    double dt = 0.01;
-    Eigen::MatrixXd I;
-    Eigen::VectorXd qdotd,qdotd_;
-    Eigen::MatrixXd H;
-    Eigen::VectorXd h;
-    Eigen::MatrixXd A;
-    Eigen::VectorXd Alb;
-    Eigen::VectorXd Aub;
-    Eigen::VectorXd lb;
-    Eigen::VectorXd ub;
-    Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
-    Eigen::MatrixXd L_choleksy;
-    bool taskInit = false;
-public:
-    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    Eigen::VectorXd qq;
-    pin_wrapper(const std::string &model_name,
-                const bool &has_floating_base, const bool &verbose = false);
+    private:
+        pinocchio::Model *pmodel_;
+        pinocchio::Data *data_;
+        std::vector<std::string> jnames_;
+        Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
+        bool has_floating_base_;
+        qpmad::Solver solver;
+        qpmad::SolverParameters solver_params;
+        double lm_damping = 1e-3;
+        double gainC = 0.35;
+        double dt = 0.01;
+        Eigen::MatrixXd I;
+        Eigen::VectorXd qdotd,qdotd_;
+        Eigen::MatrixXd H;
+        Eigen::VectorXd h;
+        Eigen::MatrixXd A;
+        Eigen::VectorXd Alb;
+        Eigen::VectorXd Aub;
+        Eigen::VectorXd lb;
+        Eigen::VectorXd ub;
+        Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
+        Eigen::MatrixXd L_choleksy;
+        bool taskInit = false;
+        
+    public:
+        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+        Eigen::VectorXd qq;
+        pin_wrapper(const std::string &model_name,
+                    const bool &has_floating_base, const bool &verbose = false);
 
-    inline int ndof() const
-    {
-        return pmodel_->nq;
-    }
-
-    inline int ndofActuated() const
-    {
-        if (has_floating_base_)
-            // Eliminate the Cartesian position and orientation (quaternion)
-            return pmodel_->nq - 7;
-        else
+        inline int ndof() const
+        {
             return pmodel_->nq;
-    }
+        }
 
+        inline int ndofActuated() const
+        {
+            if (has_floating_base_)
+                // Eliminate the Cartesian position and orientation (quaternion)
+                return pmodel_->nq - 7;
+            else
+                return pmodel_->nq;
+        }
 
-    void updateJointConfig(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap, double joint_std = 0);
+        void getJointData(const std::string jnames_[],
+                          double qvec[],
+                          double qdotvec[],
+                          int size);
 
-    inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
-    {
-        return linearJacobian(frame_name) * qn;
-    }
-    
-    inline Eigen::Vector3d getAngularVelocityNoise(const std::string &frame_name)
-    {
-        return angularJacobian(frame_name) * qn;
-    }
-    
-    void mapJointNamesIDs(std::map<std::string, double> qmap, std::map<std::string, double> qdotmap);
+        double getQq(const std::string &jname) const;
+        
+        void updateJointConfig(std::string ros_names[],
+                                        double qvec[],
+                                        double qdotvec[],
+                                        int size,
+                                        double joint_std = 0);
+        
+        inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
+        {
+            return linearJacobian(frame_name) * qn;
+        }
+        
+        inline Eigen::Vector3d getAngularVelocityNoise(const std::string &frame_name)
+        {
+            return angularJacobian(frame_name) * qn;
+        }
+        
+        void mapJointNamesIDs(const std::string jnames_[],
+                            const double qvec[],
+                            const double qdotvec[],
+                            int size);
 
-    Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
+        Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
 
-    inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
-    {
-        return (linearJacobian(frame_name) * qdot_);
-    }
+        inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
+        {
+            return (linearJacobian(frame_name) * qdot_);
+        }
 
-    inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
-    {
-        return (angularJacobian(frame_name) * qdot_);
-    }
+        inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
+        {
+            return (angularJacobian(frame_name) * qdot_);
+        }
 
-    Eigen::Vector3d linkPosition(const std::string &frame_name);
-    
-    Eigen::Quaterniond linkOrientation(const std::string &frame_name);
+        Eigen::Vector3d linkPosition(const std::string &frame_name);
+        
+        Eigen::Quaterniond linkOrientation(const std::string &frame_name);
 
-    Eigen::VectorXd linkPose(const std::string &frame_name);
+        Eigen::VectorXd linkPose(const std::string &frame_name);
 
-    Eigen::MatrixXd linearJacobian(const std::string &frame_name);
-    
-    Eigen::MatrixXd angularJacobian(const std::string &frame_name);
+        Eigen::MatrixXd linearJacobian(const std::string &frame_name);
+        
+        Eigen::MatrixXd angularJacobian(const std::string &frame_name);
 
-    Eigen::VectorXd comPosition();
+        Eigen::VectorXd comPosition();
 
-    Eigen::MatrixXd comJacobian() const;
+        Eigen::MatrixXd comJacobian() const;
 
-    inline std::vector<std::string> jointNames() const
-    {
-        return jnames_;
-    }
+        inline std::vector<std::string> jointNames() const
+        {
+            return jnames_;
+        }
 
-    inline Eigen::VectorXd jointMaxAngularLimits() const
-    {
-        return qmax_;
-    }
+        inline Eigen::VectorXd jointMaxAngularLimits() const
+        {
+            return qmax_;
+        }
 
-    inline Eigen::VectorXd jointMinAngularLimits() const
-    {
-        return qmin_;
-    }
+        inline Eigen::VectorXd jointMinAngularLimits() const
+        {
+            return qmin_;
+        }
 
-    inline Eigen::VectorXd jointVelocityLimits() const
-    {
-        return dqmax_;
-    }
-    
-    inline void printJointNames() const
-    {
-        std::cout << *pmodel_ << std::endl;
-    }
+        inline Eigen::VectorXd jointVelocityLimits() const
+        {
+            return dqmax_;
+        }
+        
+        inline void printJointNames() const
+        {
+            std::cout << *pmodel_ << std::endl;
+        }
 
-    void printJointLimits() const;
-    
-    inline double sgn(const double &x)
-    {
-        if (x >= 0)
-            return 1.0;
-        else
-            return -1.0;
-    }
+        void printJointLimits() const;
+        
+        inline double sgn(const double &x)
+        {
+            if (x >= 0)
+                return 1.0;
+            else
+                return -1.0;
+        }
 
-    Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
+        Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
 
-    Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
+        Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
 
-    void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain);
+        void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain);
 
-    void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac,  double weight, double gain);
-    
-    inline void setdt(double dt_)
-    {
-        dt = dt_;
-    }
-    
-    inline void setContraintGain(double gainC_)
-    {
-        gainC = gainC_;
-    }
-    
-    Eigen::VectorXd inverseKinematics();
+        void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac,  double weight, double gain);
+        
+        inline void setdt(double dt_)
+        {
+            dt = dt_;
+        }
+        
+        inline void setContraintGain(double gainC_)
+        {
+            gainC = gainC_;
+        }
+        
+        Eigen::VectorXd inverseKinematics();
     
 };
 #endif
