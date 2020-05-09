@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     pin->setdt(1.0 / joint_freq);
 
     //NAO Joints
-    std::string joint_names[26] = { "HeadYaw",
+    std::vector<std::string> joint_names = { "HeadYaw",
                                     "HeadPitch",
                                     "LShoulderPitch",
                                     "LShoulderRoll",
@@ -58,18 +58,18 @@ int main(int argc, char **argv)
                                     "RWristYaw",
                                     "RHand"};
 
-    double joint_positions[26] = { -0.0123138427734375, -0.013848066329956055, 1.501744031906128, 0.2929520606994629, -1.362234115600586, -0.31136012077331543,
+    std::vector<double> joint_positions = { -0.0123138427734375, -0.013848066329956055, 1.501744031906128, 0.2929520606994629, -1.362234115600586, -0.31136012077331543,
                                    0.02603602409362793, 0.24239999055862427, 4.1961669921875e-05, -0.029103994369506836, -0.4540219306945801, 1.2271580696105957,
                                    -0.7731781005859375, 0.03072190284729004, 0.0, 0.0015759468078613281, -0.5292720794677734, 1.2533202171325684,
                                    -0.7194039821624756, 0.0015759468078613281, 1.5877318382263184, -0.3298518657684326, 1.348344087600708, 0.3528618812561035,
                                    -0.02611994743347168, 0.2476000189781189 };
-    double joint_velocities[26] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+    std::vector<double> joint_velocities = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
    
     //Update Joint_states in Pinocchio
-    pin->updateJointConfig(joint_names,joint_positions,joint_velocities,26);
-    /*
-    pin->getJointData(joint_names,joint_positions,joint_velocities,26);
-    */
+    pin->updateJointConfig(joint_names,joint_positions,joint_velocities);
+    
+    pin->getJointData(joint_names,joint_positions,joint_velocities);
+    
     
     int i=0;
     LeakyIntegrator li[26];

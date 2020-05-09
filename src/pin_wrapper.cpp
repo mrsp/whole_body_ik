@@ -111,17 +111,16 @@ pin_wrapper::pin_wrapper(const std::string &model_name,const bool &has_floating_
     std::cout << "Model loaded: " << model_name << std::endl;
 }
 
-void pin_wrapper::updateJointConfig(std::string jnames_[],
-                                    double qvec[],
-                                    double qdotvec[],
-                                    int size,
+void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames_,
+                                    const std::vector<double> &qvec,
+                                    const std::vector<double> &qdotvec,
                                     double joint_std)
 {    
     H.setZero(pmodel_->nv, pmodel_->nv);
     h.setZero(pmodel_->nv);
     taskInit = false;
     
-    mapJointNamesIDs(jnames_, qvec,qdotvec,size);    
+    mapJointNamesIDs(jnames_,qvec,qdotvec);    
     if (has_floating_base_)
     {
         // Change quaternion order: in Pinocchio it is
@@ -152,15 +151,18 @@ void pin_wrapper::updateJointConfig(std::string jnames_[],
     
 }
 
-void pin_wrapper::mapJointNamesIDs(const std::string jnames_[],
-                                   const double qvec[],
-                                   const double qdotvec[],
-                                   int size)
+void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames_,
+                                   const std::vector<double> &qvec,
+                                   const std::vector<double> &qdotvec)
 {
+    assert(qvec.size()==jnames_.size() && qdotvec.size()==jnames_.size());
+    
     q_.resize(pmodel_->nq);
     qdot_.resize(pmodel_->nv);
     qq.resize(pmodel_->nv);
-    for (int i = 0; i < size; i++)
+    
+    
+    for (int i = 0; i < jnames_.size(); i++)
     {
         int jidx = pmodel_->getJointId(jnames_[i]);
         int qidx = pmodel_->idx_qs[jidx];
@@ -179,17 +181,21 @@ void pin_wrapper::mapJointNamesIDs(const std::string jnames_[],
             q_[qidx] = qvec[i];
             qdot_[vidx] = qdotvec[i];
             qq[vidx] = qvec[i];
-
         }
     }
 }
 
-void pin_wrapper::getJointData(const std::string jnames_[],
-                               double qvec[],
-                               double qdotvec[],
-                               int size)
+void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
+                               std::vector<double> &qvec,
+                               std::vector<double> &qdotvec)
 {
-    for (int i = 0; i < size; i++)
+    qvec.clear();
+    qdotvec.clear();
+    
+    qvec.reserve(jnames_.size());
+    qdotvec.reserve(jnames_.size());
+    
+    for (int i = 0; i < jnames_.size(); i++)
     {
         int jidx = pmodel_->getJointId(jnames_[i]);
         int vidx = pmodel_->idx_vs[jidx];

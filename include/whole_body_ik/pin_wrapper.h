@@ -97,18 +97,16 @@ class pin_wrapper
                 return pmodel_->nq;
         }
 
-        void getJointData(const std::string jnames_[],
-                          double qvec[],
-                          double qdotvec[],
-                          int size);
+        void getJointData(const std::vector<std::string> &jnames_,
+                               std::vector<double> &qvec,
+                               std::vector<double> &qdotvec);
 
         double getQq(const std::string &jname) const;
         
-        void updateJointConfig(std::string ros_names[],
-                                        double qvec[],
-                                        double qdotvec[],
-                                        int size,
-                                        double joint_std = 0);
+        void updateJointConfig(const std::vector<std::string> &jnames_,
+                               const std::vector<double> &qvec,
+                               const std::vector<double> &qdotvec,
+                               double joint_std = 0);
         
         inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
         {
@@ -120,11 +118,10 @@ class pin_wrapper
             return angularJacobian(frame_name) * qn;
         }
         
-        void mapJointNamesIDs(const std::string jnames_[],
-                            const double qvec[],
-                            const double qdotvec[],
-                            int size);
-
+        void mapJointNamesIDs(const std::vector<std::string> &jnames_,
+                                   const std::vector<double> &qvec,
+                                   const std::vector<double> &qdotvec);
+        
         Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
 
         inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
