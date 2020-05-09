@@ -18,7 +18,8 @@ int main(int argc, char **argv)
     ros::NodeHandle n_p("~");
     std::string modelname, base_link_frame, lfoot_frame, rfoot_frame;
     double joint_freq;
-    n_p.param<std::string>("modelname", modelname, "/home/master/Desktop/nao_walk_ws/src/whole_body_ik/share/urdf/nao.urdf");
+    //n_p.param<std::string>("modelname", modelname, "/home/master/Desktop/nao_walk_ws/src/whole_body_ik/share/urdf/nao.urdf");
+    n_p.param<std::string>("modelname", modelname, "/home/tavu/catkin_ws/src/whole_body_ik/share/urdf/nao.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
     n_p.param<std::string>("lfoot", lfoot_frame, "l_ankle");
     n_p.param<std::string>("rfoot", rfoot_frame, "r_ankle");
@@ -76,8 +77,12 @@ int main(int argc, char **argv)
         i++;
     }
 
+    
     //Update Joint_states in Pinocchio
     pin->updateJointConfig(joint_state_pos_map, joint_state_vel_map);
+    
+       
+    
     LeakyIntegrator li[26];
     while(i<26)
     {

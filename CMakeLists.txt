@@ -49,11 +49,16 @@ include_directories(
 
 link_directories(${PINOCCHIO_LIBRARY_DIRS})
 
-
+## CPP source files
+SET(cpp_src
+    src/whole_body_ik_driver.cpp 
+    src/LeakyIntegrator.cpp
+    src/pin_wrapper.cpp
+)
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(whole_body_ik src/whole_body_ik_driver.cpp src/LeakyIntegrator.cpp)
+add_executable(whole_body_ik ${cpp_src})
 
 
 target_link_libraries(whole_body_ik ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
