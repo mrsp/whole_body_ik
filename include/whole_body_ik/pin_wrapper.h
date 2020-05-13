@@ -61,8 +61,8 @@ class pin_wrapper
         bool has_floating_base_;
         qpmad::Solver solver;
         qpmad::SolverParameters solver_params;
-        double lm_damping = 1e-3;
-        double gainC = 0.35;
+        double lm_damping = 5e-3;
+        double gainC = 0.5;
         double dt = 0.01;
         Eigen::MatrixXd I;
         Eigen::VectorXd qdotd,qdotd_;
@@ -100,7 +100,8 @@ class pin_wrapper
         void getJointData(const std::vector<std::string> &jnames_,
                                std::vector<double> &qvec,
                                std::vector<double> &qdotvec);
-
+       void getDesiredJointData(const std::vector<std::string> &jnames_,
+                               std::vector<double> &qdotvec);
         double getQq(const std::string &jname) const;
         
         void updateJointConfig(const std::vector<std::string> &jnames_,

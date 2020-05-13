@@ -192,8 +192,8 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
     qvec.clear();
     qdotvec.clear();
     
-    qvec.reserve(jnames_.size());
-    qdotvec.reserve(jnames_.size());
+    qvec.resize(jnames_.size());
+    qdotvec.resize(jnames_.size());
     
     for (int i = 0; i < jnames_.size(); i++)
     {
@@ -204,6 +204,23 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
         qdotvec[i] = qdot_[vidx];
     }
 }
+
+void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames_,
+                               std::vector<double> &qdotvec)
+{
+    qdotvec.clear();
+    
+    qdotvec.resize(jnames_.size());
+    
+    for (int i = 0; i < jnames_.size(); i++)
+    {
+        int jidx = pmodel_->getJointId(jnames_[i]);
+        int vidx = pmodel_->idx_vs[jidx];
+        
+        qdotvec[i] = qdotd(vidx);
+    }
+}
+
 
 double pin_wrapper::getQq(const std::string &jname) const
 {
@@ -582,7 +599,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics()
 
         //qdotd_ = H.colPivHouseholderQr().solve(-h);
         //std::cout << "Unconstrained Optimal Solution" << qdotd_ << std::endl;
-        //std::cout << "-----" << std::endl;
+        std::cout << "qq-----" << qq<<std::endl;
 
 
         cholesky.compute(H);
