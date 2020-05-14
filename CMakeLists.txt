@@ -6,6 +6,9 @@ add_definitions("-DBOOST_MPL_LIMIT_LIST_SIZE=30")
 
 find_package(catkin REQUIRED COMPONENTS
   roscpp
+  sensor_msgs
+  control_msgs
+  actionlib
 )
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
@@ -30,7 +33,7 @@ pkg_check_modules(PINOCCHIO pinocchio REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES whole_body_ik
-  CATKIN_DEPENDS roscpp
+  CATKIN_DEPENDS roscpp sensor_msgs control_msgs actionlib
   DEPENDS Eigen3 pinocchio qpmad
 )
 ###########

@@ -104,6 +104,8 @@ class pin_wrapper
                                std::vector<double> &qdotvec);
         double getQq(const std::string &jname) const;
         
+        double getQdotd(const std::string &jname) const;
+
         void updateJointConfig(const std::vector<std::string> &jnames_,
                                const std::vector<double> &qvec,
                                const std::vector<double> &qdotvec,

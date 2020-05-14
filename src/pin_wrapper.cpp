@@ -132,17 +132,15 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames_,
         qpin[5] = q_[6];
         qpin[6] = q_[3];
 
-        //pinocchio::forwardKinematics(*pmodel_, *data_, qpin);
-        pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, qpin);
+        pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
 
     }
     else
     {
         
-        //pinocchio::forwardKinematics(*pmodel_, *data_, q_);
-        pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
         pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+        pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
         
      
     }
@@ -228,6 +226,14 @@ double pin_wrapper::getQq(const std::string &jname) const
     int vidx = pmodel_->idx_vs[jidx];
     
     return qq[vidx];
+}
+
+double pin_wrapper::getQdotd(const std::string &jname) const
+{
+    int jidx = pmodel_->getJointId(jname);
+    int vidx = pmodel_->idx_vs[jidx];
+    
+    return qdotd(vidx);
 }
 
 Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)
@@ -462,22 +468,10 @@ Eigen::VectorXd pin_wrapper::comPosition()
 Eigen::MatrixXd pin_wrapper::comJacobian() const
 {
     Eigen::MatrixXd Jcom;
-    if (has_floating_base_)
-    {
-        // Change quaternion order: in oscr it is (w,x,y,z) and in Pinocchio it is
-        // (x,y,z,w)
-        Eigen::VectorXd qpin;
-        qpin = q_;
-        qpin[3] = q_[4];
-        qpin[4] = q_[5];
-        qpin[5] = q_[6];
-        qpin[6] = q_[3];
-        Jcom = pinocchio::jacobianCenterOfMass(*pmodel_, *data_, qpin);
-    }
-    else
-    {
+    Jcom.setZero(3,pmodel_->nv);
+  
         Jcom = pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
-    }
+    
     return Jcom;
 }    
     
@@ -578,6 +572,9 @@ void pin_wrapper::setTask(const std::string &frame_name, int task_type, Eigen::V
 
 void pin_wrapper::addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac,  double weight, double gain)
 {
+    //std::cout<<" H " <<H<<std::endl;
+    //std::cout<<" h " <<h<<std::endl;
+
     Eigen::Vector3d res = vdes - Jac * qdot_;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, res.norm()) * I;
     h += (-weight * gain * vdes.transpose() * Jac).transpose();
