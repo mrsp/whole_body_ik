@@ -54,7 +54,7 @@ link_directories(${PINOCCHIO_LIBRARY_DIRS})
 
 ## CPP source files
 SET(cpp_src
-    src/whole_body_ik_driver.cpp 
+    src/whole_body_ik_talos_driver.cpp 
     src/LeakyIntegrator.cpp
     src/pin_wrapper.cpp
 )

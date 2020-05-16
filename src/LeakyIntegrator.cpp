@@ -1,30 +1,30 @@
-  #include <whole_body_ik/LeakyIntegrator.h>
+#include <whole_body_ik/LeakyIntegrator.h>
 
+LeakyIntegrator::LeakyIntegrator()
+{
+  integral_ = 0.0;
+  rate_ = 0.1;
+  saturation_ = false;
+}
+void LeakyIntegrator::add(const double &value, double dt)
+{
 
-  LeakyIntegrator::LeakyIntegrator()
+  double leak_ = (rate_ * dt) > 1.0 ? 1.0 : (rate_ * dt); //For numerical stability
+  integral_ = (1.0 - leak_) * integral_ + dt * value;
+  if (saturation_)
   {
-        integral_ = 0.0;
-        rate_ = 0.1;
-        saturation_ = -1.;
+    saturate();
   }
-  void LeakyIntegrator::add(const double & value, double dt)
-  {
-    integral_ = (1. - rate_ * dt) * integral_ + dt * value;
-    if (saturation_ > 0.)
-    {
-      saturate();
-    }
-  }
+}
 
- void LeakyIntegrator::saturate()
+void LeakyIntegrator::saturate()
+{
+  if (integral_ < l_sat)
   {
-      if (integral_ < -saturation_)
-      {
-        integral_ = -saturation_;
-      }
-      else if (integral_ > saturation_)
-      {
-        integral_ = saturation_;
-      }
+    integral_ = l_sat;
   }
-  
+  else if (integral_ > u_sat)
+  {
+    integral_ = u_sat;
+  }
+}

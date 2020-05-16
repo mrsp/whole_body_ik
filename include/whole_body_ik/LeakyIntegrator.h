@@ -2,7 +2,7 @@
 
 class LeakyIntegrator
 {
-  public:
+public:
   /** Add constant input for a fixed duration.
    *
    * \param value Constant input.
@@ -10,12 +10,12 @@ class LeakyIntegrator
    * \param dt Fixed duration.
    *
    */
-  void add(const double & value, double dt);
+  void add(const double &value, double dt);
 
   /** Evaluate the output of the integrator.
    *
    */
-  const double & eval() const
+  const double &eval() const
   {
     return integral_;
   }
@@ -29,24 +29,16 @@ class LeakyIntegrator
     return rate_;
   }
 
-  /** Set the leak rate of the integrator.
-   *
-   * \param rate New leak rate.
-   *
-   */
-  inline void rate(double rate)
-  {
-    rate_ = rate;
-  }
-
   /** Set output saturation. Disable by providing a negative value.
    *
-   * \param s Output will saturate between -s and +s.
+   * \param sat_ Output will saturate between -sat_ and +sat_.
    *
    */
-  inline void saturation(double s)
+  inline void setSaturation(double u_sat_, double l_sat_)
   {
-    saturation_ = s;
+    saturation_ = true;
+    u_sat = u_sat_;
+    l_sat = l_sat_;
   }
 
   /** Reset integral to zero.
@@ -54,15 +46,27 @@ class LeakyIntegrator
    */
   inline void setZero()
   {
-    integral_=0.0;
+    integral_ = 0.0;
   }
   inline void setInitialState(double value_)
   {
     integral_ = value_;
   }
+
+  /** Set the leak rate of the integrator.
+   *
+   * \param rate New leak rate. When rate = 0 LeakyIntegrator turns to a common integrator
+   *
+   */
+  inline void setRate(double rate)
+  {
+    rate_ = rate;
+  }
+
 private:
   void saturate();
   double integral_;
   double rate_;
-  double saturation_;
+  bool saturation_;
+  double u_sat, l_sat;
 };

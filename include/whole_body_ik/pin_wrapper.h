@@ -47,164 +47,162 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <Eigen/Cholesky>
-
+#include <whole_body_ik/LeakyIntegrator.h>
 using namespace std;
 
 class pin_wrapper
 {
 
-    private:
-        pinocchio::Model *pmodel_;
-        pinocchio::Data *data_;
-        std::vector<std::string> jnames_;
-        Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
-        bool has_floating_base_;
-        qpmad::Solver solver;
-        qpmad::SolverParameters solver_params;
-        double lm_damping = 5e-3;
-        double gainC = 0.5;
-        double dt = 0.01;
-        Eigen::MatrixXd I;
-        Eigen::VectorXd qdotd,qdotd_;
-        Eigen::MatrixXd H;
-        Eigen::VectorXd h;
-        Eigen::MatrixXd A;
-        Eigen::VectorXd Alb;
-        Eigen::VectorXd Aub;
-        Eigen::VectorXd lb;
-        Eigen::VectorXd ub;
-        Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
-        Eigen::MatrixXd L_choleksy;
-        bool taskInit = false;
-        
-    public:
-        EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-        Eigen::VectorXd qq;
-        pin_wrapper(const std::string &model_name,
-                    const bool &has_floating_base, const bool &verbose = false);
+private:
+    pinocchio::Model *pmodel_;
+    pinocchio::Data *data_;
+    std::vector<std::string> jnames_;
+    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
+    bool has_floating_base_;
+    qpmad::Solver solver;
+    qpmad::SolverParameters solver_params;
+    double lm_damping = 5e-3;
+    double gainC = 0.5;
+    Eigen::MatrixXd I;
+    Eigen::VectorXd qdotd, qdotd_, qd;
+    Eigen::MatrixXd H;
+    Eigen::VectorXd h;
+    Eigen::MatrixXd A;
+    Eigen::VectorXd Alb;
+    Eigen::VectorXd Aub;
+    Eigen::VectorXd lb, lbdq, lbq;
+    Eigen::VectorXd ub, ubdq, ubq;
+    Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
+    Eigen::MatrixXd L_choleksy;
+    LeakyIntegrator **li;
+    bool taskInit = false;
+    bool position_control;
 
-        inline int ndof() const
-        {
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+    Eigen::VectorXd qq;
+    pin_wrapper(const std::string &model_name, const bool &has_floating_base, const bool &verbose = false);
+
+    inline int ndof() const
+    {
+        return pmodel_->nq;
+    }
+
+    inline int ndofActuated() const
+    {
+        if (has_floating_base_)
+            // Eliminate the Cartesian position and orientation (quaternion)
+            return pmodel_->nq - 7;
+        else
             return pmodel_->nq;
-        }
+    }
 
-        inline int ndofActuated() const
-        {
-            if (has_floating_base_)
-                // Eliminate the Cartesian position and orientation (quaternion)
-                return pmodel_->nq - 7;
-            else
-                return pmodel_->nq;
-        }
+    void getJointData(const std::vector<std::string> &jnames_,
+                      std::vector<double> &qvec,
+                      std::vector<double> &qdotvec);
+    void getDesiredJointData(const std::vector<std::string> &jnames_,
+                             std::vector<double> &qvec,
+                             std::vector<double> &qdotvec);
+    double getQq(const std::string &jname) const;
 
-        void getJointData(const std::vector<std::string> &jnames_,
-                               std::vector<double> &qvec,
-                               std::vector<double> &qdotvec);
-       void getDesiredJointData(const std::vector<std::string> &jnames_,
-                               std::vector<double> &qdotvec);
-        double getQq(const std::string &jname) const;
-        
-        double getQdotd(const std::string &jname) const;
+    double getQdotd(const std::string &jname) const;
 
-        void updateJointConfig(const std::vector<std::string> &jnames_,
-                               const std::vector<double> &qvec,
-                               const std::vector<double> &qdotvec,
-                               double joint_std = 0);
-        
-        inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
-        {
-            return linearJacobian(frame_name) * qn;
-        }
-        
-        inline Eigen::Vector3d getAngularVelocityNoise(const std::string &frame_name)
-        {
-            return angularJacobian(frame_name) * qn;
-        }
-        
-        void mapJointNamesIDs(const std::vector<std::string> &jnames_,
-                                   const std::vector<double> &qvec,
-                                   const std::vector<double> &qdotvec);
-        
-        Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
+    double getQd(const std::string &jname) const;
 
-        inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
-        {
-            return (linearJacobian(frame_name) * qdot_);
-        }
+    void printDesiredJointData() const;
+    void updateJointConfig(const std::vector<std::string> &jnames_,
+                           const std::vector<double> &qvec,
+                           const std::vector<double> &qdotvec,
+                           double joint_std = 0);
 
-        inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
-        {
-            return (angularJacobian(frame_name) * qdot_);
-        }
+    inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
+    {
+        return linearJacobian(frame_name) * qn;
+    }
 
-        Eigen::Vector3d linkPosition(const std::string &frame_name);
-        
-        Eigen::Quaterniond linkOrientation(const std::string &frame_name);
+    inline Eigen::Vector3d getAngularVelocityNoise(const std::string &frame_name)
+    {
+        return angularJacobian(frame_name) * qn;
+    }
+    void setPoistionControl(double leak_rate);
+    void mapJointNamesIDs(const std::vector<std::string> &jnames_,
+                          const std::vector<double> &qvec,
+                          const std::vector<double> &qdotvec);
 
-        Eigen::VectorXd linkPose(const std::string &frame_name);
+    Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
 
-        Eigen::MatrixXd linearJacobian(const std::string &frame_name);
-        
-        Eigen::MatrixXd angularJacobian(const std::string &frame_name);
+    inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
+    {
+        return (linearJacobian(frame_name) * qdot_);
+    }
 
-        Eigen::VectorXd comPosition();
+    inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
+    {
+        return (angularJacobian(frame_name) * qdot_);
+    }
 
-        Eigen::MatrixXd comJacobian() const;
+    Eigen::Vector3d linkPosition(const std::string &frame_name);
 
-        inline std::vector<std::string> jointNames() const
-        {
-            return jnames_;
-        }
+    Eigen::Quaterniond linkOrientation(const std::string &frame_name);
 
-        inline Eigen::VectorXd jointMaxAngularLimits() const
-        {
-            return qmax_;
-        }
+    Eigen::VectorXd linkPose(const std::string &frame_name);
 
-        inline Eigen::VectorXd jointMinAngularLimits() const
-        {
-            return qmin_;
-        }
+    Eigen::MatrixXd linearJacobian(const std::string &frame_name);
 
-        inline Eigen::VectorXd jointVelocityLimits() const
-        {
-            return dqmax_;
-        }
-        
-        inline void printJointNames() const
-        {
-            std::cout << *pmodel_ << std::endl;
-        }
+    Eigen::MatrixXd angularJacobian(const std::string &frame_name);
 
-        void printJointLimits() const;
-        
-        inline double sgn(const double &x)
-        {
-            if (x >= 0)
-                return 1.0;
-            else
-                return -1.0;
-        }
+    Eigen::VectorXd comPosition();
 
-        Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
+    Eigen::MatrixXd comJacobian() const;
 
-        Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
+    inline std::vector<std::string> jointNames() const
+    {
+        return jnames_;
+    }
 
-        void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain);
+    inline Eigen::VectorXd jointMaxAngularLimits() const
+    {
+        return qmax_;
+    }
 
-        void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac,  double weight, double gain);
-        
-        inline void setdt(double dt_)
-        {
-            dt = dt_;
-        }
-        
-        inline void setContraintGain(double gainC_)
-        {
-            gainC = gainC_;
-        }
-        
-        Eigen::VectorXd inverseKinematics();
-    
+    inline Eigen::VectorXd jointMinAngularLimits() const
+    {
+        return qmin_;
+    }
+
+    inline Eigen::VectorXd jointVelocityLimits() const
+    {
+        return dqmax_;
+    }
+
+    inline void printJointNames() const
+    {
+        std::cout << *pmodel_ << std::endl;
+    }
+
+    void printJointLimits() const;
+
+    inline double sgn(const double &x)
+    {
+        if (x >= 0)
+            return 1.0;
+        else
+            return -1.0;
+    }
+
+    Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
+
+    Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
+
+    void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain);
+
+    void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac, double weight, double gain);
+
+    inline void setContraintGain(double gainC_)
+    {
+        gainC = gainC_;
+    }
+
+    Eigen::VectorXd inverseKinematics(double dt);
 };
 #endif
