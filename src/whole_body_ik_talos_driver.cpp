@@ -47,7 +47,6 @@ int main(int argc, char **argv)
     std::string modelname, base_link_frame, lfoot_frame, rfoot_frame, lhand_frame, rhand_frame, head_frame;
     double joint_freq;
     n_p.param<std::string>("modelname", modelname, "/home/master/talos_walk_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
-    //n_p.param<std::string>("modelname", modelname, "/home/tavu/catkin_ws/src/whole_body_ik/share/urdf/nao.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
     n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
     n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
@@ -262,12 +261,12 @@ int main(int argc, char **argv)
     rleg_goal.trajectory.joint_names = {"leg_right_1_joint", "leg_right_2_joint", "leg_right_3_joint", "leg_right_4_joint", "leg_right_5_joint", "leg_right_6_joint"};
     trajectory_msgs::JointTrajectoryPoint rleg_point;
     rleg_point.positions.resize(6);
-    rleg_point.positions[0] = pin->getQdotd("leg_right_1_joint");
-    rleg_point.positions[1] = pin->getQdotd("leg_right_2_joint");
-    rleg_point.positions[2] = pin->getQdotd("leg_right_3_joint");
-    rleg_point.positions[3] = pin->getQdotd("leg_right_4_joint");
-    rleg_point.positions[4] = pin->getQdotd("leg_right_5_joint");
-    rleg_point.positions[5] = pin->getQdotd("leg_right_6_joint");
+    rleg_point.positions[0] = pin->getQd("leg_right_1_joint");
+    rleg_point.positions[1] = pin->getQd("leg_right_2_joint");
+    rleg_point.positions[2] = pin->getQd("leg_right_3_joint");
+    rleg_point.positions[3] = pin->getQd("leg_right_4_joint");
+    rleg_point.positions[4] = pin->getQd("leg_right_5_joint");
+    rleg_point.positions[5] = pin->getQd("leg_right_6_joint");
     rleg_goal.trajectory.points.resize(1);
     rleg_goal.trajectory.points[0] = rleg_point;
     rleg_goal.trajectory.points[0].time_from_start = ros::Duration(dt);
