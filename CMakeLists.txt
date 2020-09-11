@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   control_msgs
   actionlib
+  whole_body_ik_msgs
 )
 ## System dependencies are found with CMake's conventions
 find_package(Boost REQUIRED COMPONENTS system)
@@ -33,7 +34,7 @@ pkg_check_modules(PINOCCHIO pinocchio REQUIRED)
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES whole_body_ik
-  CATKIN_DEPENDS roscpp sensor_msgs control_msgs actionlib
+  CATKIN_DEPENDS roscpp sensor_msgs control_msgs actionlib whole_body_ik_msgs
   DEPENDS Eigen3 pinocchio qpmad
 )
 ###########
@@ -55,15 +56,16 @@ link_directories(${PINOCCHIO_LIBRARY_DIRS})
 ## CPP source files
 SET(cpp_src
     src/whole_body_ik_talos_driver.cpp 
+    src/talos.cpp
     src/LeakyIntegrator.cpp
     src/pin_wrapper.cpp
 )
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(whole_body_ik ${cpp_src})
+add_executable(whole_body_ik_node ${cpp_src})
 
 
-target_link_libraries(whole_body_ik ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
-target_compile_definitions(whole_body_ik PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
-add_dependencies(whole_body_ik ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+target_link_libraries(whole_body_ik_node ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
+target_compile_definitions(whole_body_ik_node PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
+add_dependencies(whole_body_ik_node  ${catkin_EXPORTED_TARGETS})

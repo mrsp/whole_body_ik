@@ -82,7 +82,7 @@ public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Eigen::VectorXd qq;
     pin_wrapper(const std::string &model_name, const bool &has_floating_base, const bool &verbose = false);
-
+    bool initialized;
     inline int ndof() const
     {
         return pmodel_->nq;

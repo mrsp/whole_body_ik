@@ -106,7 +106,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     //Composite Joint Constraints
     lb.resize(pmodel_->nv);
     ub.resize(pmodel_->nv);
-
+    initialized = false;
     //solver_params.hessian_type_ = qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
 
     std::cout << "Joint Names " << std::endl;
