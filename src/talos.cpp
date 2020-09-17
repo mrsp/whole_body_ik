@@ -4,13 +4,13 @@ talos::talos(ros::NodeHandle nh_)
 {
     nh = nh_;
     ros::NodeHandle n_p("~");
-    n_p.param<std::string>("modelname", modelname, "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
+    n_p.param<std::string>("modelname", modelname, "/home/master/talos_walk_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
-    n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
-    n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
+    n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
+    n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
     n_p.param<std::string>("arm_left_7_link", lhand_frame, "arm_left_7_link");
     n_p.param<std::string>("arm_right_7_link", rhand_frame, "arm_right_7_link");
-    n_p.param<std::string>("rgbd_link", head_frame, "rgbd_link");
+    n_p.param<std::string>("rgbd_link", head_frame, "head_2_link");
     n_p.param<double>("joint_freq", joint_freq, 50.0);
 
     //Initialize the Pinocchio Wrapper
@@ -66,12 +66,6 @@ void talos::run()
         {
             //Update Joint_states in Pinocchio
             pin->updateJointConfig(joint_names, joint_positions, joint_velocities);
-            if(!pin->initialized)
-            {
-                pin->setPoistionControl(0);
-                pin->initialized = true;
-                std::cout<<pin->comPosition()<<std::endl;
-            }
             joint_inc = false;
         }
         rate.sleep();
@@ -82,8 +76,6 @@ void talos::run()
 
 void talos::walking()
 {
-
-
 
     double dt = 5.0;
      //Send Desired Joints to Talos
@@ -189,100 +181,150 @@ void talos::walking()
 void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
 {
     std::cout<<"Received "<<std::endl;
+    linearTask ltask;
+    angularTask atask;
+    std::vector<linearTask> ltaskVec;
+    std::vector<angularTask> ataskVec;
+    //Define Tasks
+    double wh = 1000.0;
+    double wm = 10.0;
+    double wl = 1.0;
+
+
+
+
     //Define Tasks for Whole Body Control
-    Eigen::Vector3d vdes;
-    int task_type; //0 for linear velocity/ 1 for angular velocity / 2 for CoM Linear Task
 
     //Left Foot Task
-    if( msg->LLeg.linear_velocity.weight >0 && msg->LLeg.linear_velocity.gain > 0)
+    if( msg->LLeg.linear_task.weight >0 && msg->LLeg.linear_task.gain > 0)
     {
-        vdes = Vector3d(msg->LLeg.linear_velocity.x, msg->LLeg.linear_velocity.y, msg->LLeg.linear_velocity.z);
-        task_type = 0; 
-        pin->setTask(lfoot_frame, task_type, vdes, msg->LLeg.linear_velocity.weight, msg->LLeg.linear_velocity.gain);
+        ltask.frame_name = lfoot_frame;
+        ltask.des = Eigen::Vector3d(msg->LLeg.linear_task.des.x,  msg->LLeg.linear_task.des.y, msg->LLeg.linear_task.des.z);
+        ltask.weight = msg->LLeg.linear_task.weight;
+        ltask.gain = msg->LLeg.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
     }
 
-    if(msg->LLeg.angular_velocity.weight > 0 && msg->LLeg.angular_velocity.gain > 0)
+    if(msg->LLeg.angular_task.weight > 0 && msg->LLeg.angular_task.gain > 0)
     {
-        vdes = Vector3d(msg->LLeg.angular_velocity.x, msg->LLeg.angular_velocity.y, msg->LLeg.angular_velocity.z);
-        task_type = 1; 
-        pin->setTask(lfoot_frame, task_type, vdes, msg->LLeg.angular_velocity.weight, msg->LLeg.angular_velocity.gain);
+        atask.frame_name = lfoot_frame;
+        atask.des = Eigen::Quaterniond(msg->LLeg.angular_task.des.w, msg->LLeg.angular_task.des.x, msg->LLeg.angular_task.des.y, msg->LLeg.angular_task.des.z);
+        atask.weight = msg->LLeg.angular_task.weight;
+        atask.gain = msg->LLeg.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
 
     //Right Foot Support task
-    if( msg->RLeg.linear_velocity.weight >0 && msg->RLeg.linear_velocity.gain > 0)
+    if( msg->RLeg.linear_task.weight >0 && msg->RLeg.linear_task.gain > 0)
     {
-        task_type = 0; 
-        vdes = Vector3d(msg->RLeg.linear_velocity.x, msg->RLeg.linear_velocity.y, msg->RLeg.linear_velocity.z);
-        pin->setTask(lfoot_frame, task_type, vdes, msg->RLeg.linear_velocity.weight, msg->RLeg.linear_velocity.gain);
+        ltask.frame_name = rfoot_frame;
+        ltask.des = Eigen::Vector3d(msg->RLeg.linear_task.des.x,  msg->RLeg.linear_task.des.y, msg->RLeg.linear_task.des.z);
+        ltask.weight = msg->RLeg.linear_task.weight;
+        ltask.gain = msg->RLeg.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
     }
-    if(msg->RLeg.angular_velocity.weight > 0 && msg->RLeg.angular_velocity.gain > 0)
+    if(msg->RLeg.angular_task.weight > 0 && msg->RLeg.angular_task.gain > 0)
     {
-        task_type = 1; 
-        vdes = Vector3d(msg->RLeg.angular_velocity.x, msg->RLeg.angular_velocity.y, msg->RLeg.angular_velocity.z);
-        pin->setTask(lfoot_frame, task_type, vdes, msg->RLeg.angular_velocity.weight, msg->RLeg.angular_velocity.gain);
+        atask.frame_name = rfoot_frame;
+        atask.des = Eigen::Quaterniond(msg->RLeg.angular_task.des.w, msg->RLeg.angular_task.des.x, msg->RLeg.angular_task.des.y, msg->RLeg.angular_task.des.z);
+        atask.weight = msg->RLeg.angular_task.weight;
+        atask.gain = msg->RLeg.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
+
     //CoM task
-    // if(msg->CoM.linear_velocity.weight > 0 &&  msg->CoM.linear_velocity.gain > 0)
-    // {
-    //     task_type = 2; 
-    //     vdes = Vector3d(msg->CoM.linear_velocity.x, msg->CoM.linear_velocity.y, msg->CoM.linear_velocity.z);
-    //     pin->setTask("CoM", task_type, vdes,  msg->CoM.linear_velocity.weight,  msg->CoM.linear_velocity.gain);
-    // }
-    //Torso 
-    if(msg->Torso.linear_velocity.weight > 0 && msg->Torso.linear_velocity.gain > 0)
+    if(msg->CoM.linear_task.weight > 0 &&  msg->CoM.linear_task.gain > 0)
     {
-        task_type = 0; 
-        vdes =  Vector3d(msg->Torso.linear_velocity.x, msg->Torso.linear_velocity.y, msg->Torso.linear_velocity.z);
-        pin->setTask(base_link_frame, task_type, vdes, msg->Torso.linear_velocity.weight, msg->Torso.linear_velocity.gain);
+        ltask.frame_name = "CoM";
+        ltask.des = Eigen::Vector3d(msg->CoM.linear_task.des.x,  msg->CoM.linear_task.des.y, msg->CoM.linear_task.des.z);
+        ltask.weight = msg->CoM.linear_task.weight;
+        ltask.gain = msg->CoM.linear_task.gain;
+        ltask.task_type = 2; 
+        ltaskVec.push_back(ltask);
     }
-    if(msg->Torso.angular_velocity.weight > 0 && msg->Torso.angular_velocity.gain > 0)
+    //Torso 
+    if(msg->Torso.linear_task.weight > 0 && msg->Torso.linear_task.gain > 0)
     {
-        task_type = 1; 
-        vdes =  Vector3d(msg->Torso.angular_velocity.x, msg->Torso.angular_velocity.y, msg->Torso.angular_velocity.z);
-        pin->setTask(base_link_frame, task_type, vdes, msg->Torso.angular_velocity.weight, msg->Torso.angular_velocity.gain);
+        ltask.frame_name = base_link_frame;
+        ltask.des = Eigen::Vector3d(msg->Torso.linear_task.des.x,  msg->Torso.linear_task.des.y, msg->Torso.linear_task.des.z);
+        ltask.weight = msg->Torso.linear_task.weight;
+        ltask.gain = msg->Torso.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
+    }
+    if(msg->Torso.angular_task.weight > 0 && msg->Torso.angular_task.gain > 0)
+    {
+        atask.frame_name = base_link_frame;
+        atask.des = Eigen::Quaterniond(msg->Torso.angular_task.des.w, msg->Torso.angular_task.des.x, msg->Torso.angular_task.des.y, msg->Torso.angular_task.des.z);
+        atask.weight = msg->Torso.angular_task.weight;
+        atask.gain = msg->Torso.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
     //Head
-    if(msg->Head.linear_velocity.weight > 0 && msg->Head.linear_velocity.gain > 0)
+    if(msg->Head.linear_task.weight > 0 && msg->Head.linear_task.gain > 0)
     {
-        task_type = 0; 
-        vdes = Vector3d(msg->Head.linear_velocity.x, msg->Head.linear_velocity.y, msg->Head.linear_velocity.z);
-        pin->setTask(head_frame, task_type, vdes, msg->Head.linear_velocity.weight, msg->Head.linear_velocity.gain);
+        ltask.frame_name = head_frame;
+        ltask.des = Eigen::Vector3d(msg->Head.linear_task.des.x,  msg->Head.linear_task.des.y, msg->Head.linear_task.des.z);
+        ltask.weight = msg->Head.linear_task.weight;
+        ltask.gain = msg->Head.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
     }
-    if(msg->Head.angular_velocity.weight > 0 && msg->Head.angular_velocity.gain > 0)
+    if(msg->Head.angular_task.weight > 0 && msg->Head.angular_task.gain > 0)
     {
-        task_type = 1;
-        vdes = Vector3d(msg->Head.angular_velocity.x, msg->Head.angular_velocity.y, msg->Head.angular_velocity.z);
-        pin->setTask(head_frame, task_type, vdes, msg->Head.angular_velocity.weight, msg->Head.angular_velocity.gain);
+        atask.frame_name = head_frame;
+        atask.des = Eigen::Quaterniond(msg->Head.angular_task.des.w, msg->Head.angular_task.des.x, msg->Head.angular_task.des.y, msg->Head.angular_task.des.z);
+        atask.weight = msg->Head.angular_task.weight;
+        atask.gain = msg->Head.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
     //Right Hand
-    if(msg->RHand.linear_velocity.weight>0 &&  msg->RHand.linear_velocity.gain>0)
+    if(msg->RHand.linear_task.weight>0 &&  msg->RHand.linear_task.gain>0)
     {
-        task_type = 0; 
-        vdes = Vector3d(msg->RHand.linear_velocity.x, msg->RHand.linear_velocity.y, msg->RHand.linear_velocity.z);
-        pin->setTask(rhand_frame, task_type, vdes,  msg->RHand.linear_velocity.weight, msg->RHand.linear_velocity.gain);
+        ltask.frame_name = rhand_frame;
+        ltask.des = Eigen::Vector3d(msg->RHand.linear_task.des.x,  msg->RHand.linear_task.des.y, msg->RHand.linear_task.des.z);
+        ltask.weight = msg->RHand.linear_task.weight;
+        ltask.gain = msg->RHand.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
     }
-    if(msg->LHand.angular_velocity.weight>0 && msg->LHand.angular_velocity.gain>0)
+    if(msg->RHand.angular_task.weight>0 && msg->RHand.angular_task.gain>0)
     {
-        task_type = 1; 
-        vdes = Vector3d(msg->RHand.angular_velocity.x, msg->RHand.angular_velocity.y, msg->RHand.angular_velocity.z);
-        pin->setTask(rhand_frame, task_type, vdes, msg->RHand.angular_velocity.weight, msg->RHand.angular_velocity.gain);
+        atask.frame_name = rhand_frame;
+        atask.des = Eigen::Quaterniond(msg->RHand.angular_task.des.w, msg->RHand.angular_task.des.x, msg->RHand.angular_task.des.y, msg->RHand.angular_task.des.z);
+        atask.weight = msg->RHand.angular_task.weight;
+        atask.gain = msg->RHand.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
 
     //Left Hand
-    if(msg->LHand.linear_velocity.weight>0 &&  msg->LHand.linear_velocity.gain>0)
+    if(msg->LHand.linear_task.weight>0 &&  msg->LHand.linear_task.gain>0)
     {
-        task_type = 0; 
-        vdes = Vector3d(msg->LHand.linear_velocity.x, msg->LHand.linear_velocity.y, msg->LHand.linear_velocity.z);
-        pin->setTask(lhand_frame, task_type, vdes,  msg->LHand.linear_velocity.weight, msg->LHand.linear_velocity.gain);
+        ltask.frame_name = lhand_frame;
+        ltask.des = Eigen::Vector3d(msg->LHand.linear_task.des.x,  msg->LHand.linear_task.des.y, msg->LHand.linear_task.des.z);
+        ltask.weight = msg->LHand.linear_task.weight;
+        ltask.gain = msg->LHand.linear_task.gain;
+        ltask.task_type = 0; 
+        ltaskVec.push_back(ltask); 
     }
-    if(msg->LHand.angular_velocity.weight>0 && msg->LHand.angular_velocity.gain>0)
+    if(msg->LHand.angular_task.weight>0 && msg->LHand.angular_task.gain>0)
     {
-        task_type = 1; 
-        vdes = Vector3d(msg->LHand.angular_velocity.x, msg->LHand.angular_velocity.y, msg->LHand.angular_velocity.z);
-        pin->setTask(lhand_frame, task_type, vdes, msg->LHand.angular_velocity.weight, msg->LHand.angular_velocity.gain);
+        atask.frame_name = lhand_frame;
+        atask.des = Eigen::Quaterniond(msg->LHand.angular_task.des.w, msg->LHand.angular_task.des.x, msg->LHand.angular_task.des.y, msg->LHand.angular_task.des.z);
+        atask.weight = msg->LHand.angular_task.weight;
+        atask.gain = msg->LHand.angular_task.gain;
+        atask.task_type = 1; 
+        ataskVec.push_back(atask); 
     }
 
-    pin->inverseKinematics(msg->dt);
+    pin->inverseKinematics(ltaskVec,ataskVec,msg->dt);
     pin->printDesiredJointData();
 
     //Send Desired Joints to Talos

@@ -24,12 +24,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     has_floating_base_ = has_floating_base;
     pmodel_ = new pinocchio::Model();
 
-    if (has_floating_base)
-        pinocchio::urdf::buildModel(model_name, pinocchio::JointModelFreeFlyer(),
-                                    *pmodel_, verbose);
-    else
-        pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
-
+    pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
     data_ = new pinocchio::Data(*pmodel_);
 
     jnames_.clear();
@@ -57,19 +52,6 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     qmax_ = pmodel_->upperPositionLimit;
     dqmax_ = pmodel_->velocityLimit;
 
-    // If free-floating base, eliminate the "root_joint" when displaying
-    if (has_floating_base_)
-    {
-        jnames_.erase(jnames_.begin());
-        Eigen::VectorXd tmp;
-        tmp = qmin_;
-        qmin_ = tmp.tail(jnames_.size());
-        tmp = qmax_;
-        qmax_ = tmp.tail(jnames_.size());
-        tmp = dqmax_;
-        dqmax_ = tmp.tail(jnames_.size());
-    }
-
     // Continuous joints are given spurious values par default, set those values
     // to arbitrary ones
     for (int i = 0; i < qmin_.size(); ++i)
@@ -90,7 +72,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     qdotd.setZero(pmodel_->nv);
     qd.setZero(pmodel_->nv);
     qdotd_.setZero(pmodel_->nv);
-
+    iters = 1000;
     //Not used in QP
     A.resize(0, 0);
     Alb.resize(0);
@@ -106,7 +88,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     //Composite Joint Constraints
     lb.resize(pmodel_->nv);
     ub.resize(pmodel_->nv);
-    initialized = false;
+
     //solver_params.hessian_type_ = qpmad::SolverParameters::HessianType::HESSIAN_CHOLESKY_FACTOR;
 
     std::cout << "Joint Names " << std::endl;
@@ -120,47 +102,18 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames_,
                                     const std::vector<double> &qdotvec,
                                     double joint_std)
 {
-    H.setZero(pmodel_->nv, pmodel_->nv);
-    h.setZero(pmodel_->nv);
-    taskInit = false;
 
     mapJointNamesIDs(jnames_, qvec, qdotvec);
-    if (has_floating_base_)
-    {
-        // Change quaternion order: in Pinocchio it is
-        // (x,y,z,w)
-        Eigen::VectorXd qpin;
-        qpin = q_;
-        qpin[3] = q_[4];
-        qpin[4] = q_[5];
-        qpin[5] = q_[6];
-        qpin[6] = q_[3];
-
-        pinocchio::framesForwardKinematics(*pmodel_, *data_, qpin);
-        pinocchio::computeJointJacobians(*pmodel_, *data_, qpin);
-    }
-    else
-    {
-
-        pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
-        pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-    }
-    qn.setOnes();
-    qn *= joint_std;
+    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+    pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
+    qd = q_;
+    qdotd = qdot_;
 }
 
-void pin_wrapper::setPoistionControl(double leak_rate)
+void pin_wrapper::forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel)
 {
-    position_control = true;
-
-    li = new LeakyIntegrator *[pmodel_->nv];
-    for (unsigned int i = 0; i < pmodel_->nv; i++)
-    {
-        li[i] = new LeakyIntegrator();
-        li[i]->setRate(leak_rate);
-        li[i]->setInitialState(q_(i));
-        li[i]->setSaturation(qmax_(i), qmin_(i));
-    }
+    pinocchio::framesForwardKinematics(*pmodel_, *data_, pin_joint_pos);
+    pinocchio::computeJointJacobians(*pmodel_, *data_, pin_joint_vel);
 }
 
 void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames_,
@@ -169,9 +122,9 @@ void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames_,
 {
     assert(qvec.size() == jnames_.size() && qdotvec.size() == jnames_.size());
 
-    q_.resize(pmodel_->nq);
-    qdot_.resize(pmodel_->nv);
-    qq.resize(pmodel_->nv);
+    q_.setZero(pmodel_->nq);
+    qdot_.setZero(pmodel_->nv);
+    qq.setZero(pmodel_->nv);
 
     for (int i = 0; i < jnames_.size(); i++)
     {
@@ -202,7 +155,6 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
 {
     qvec.clear();
     qdotvec.clear();
-
     qvec.resize(jnames_.size());
     qdotvec.resize(jnames_.size());
 
@@ -267,41 +219,11 @@ Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)
         J.fill(0);
         // Jacobian in pinocchio::LOCAL (link) frame
         pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
         pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-        if (has_floating_base_)
-        {
-            Eigen::MatrixXd Jg;
-            Jg.resize(6, this->ndof());
-            Jg.setZero();
-            Eigen::Matrix3d Rbase;
-            Rbase = quaternionToRotation(q_.segment(3, 4));
-            Jg.topLeftCorner(3, 3) =
-                Rbase.transpose() * data_->oMf[link_number].rotation() * J.block(0, 0, 3, 3);
-            Jg.topRightCorner(3, ndofActuated()) =
-                (data_->oMf[link_number].rotation()) * J.block(0, 6, 3, ndofActuated());
-            Jg.bottomRightCorner(3, ndofActuated()) =
-                (data_->oMf[link_number].rotation()) * J.block(3, 6, 3, ndofActuated());
-
-            Eigen::MatrixXd T;
-            T.resize(3, 4);
-            T << -2.0 * q_(4), 2.0 * q_(3), -2.0 * q_(6), 2.0 * q_(5),
-                -2.0 * q_(5), 2.0 * q_(6), 2.0 * q_(3), -2.0 * q_(4),
-                -2.0 * q_(6), -2.0 * q_(5), 2.0 * q_(4), 2.0 * q_(3);
-            Jg.block(0, 3, 3, 4) =
-                data_->oMf[link_number].rotation() * J.block(0, 3, 3, 3) * Rbase.transpose() * T;
-            Jg.block(3, 3, 3, 4) = T;
-
-            return Jg;
-        }
-        else
-        {
-            // Transform Jacobians from pinocchio::LOCAL frame to base frame
-            J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
-            J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-            return J;
-        }
+        // Transform Jacobians from pinocchio::LOCAL frame to base frame
+        J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
+        J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
+        return J;
     }
     catch (std::exception &e)
     {
@@ -331,9 +253,7 @@ Eigen::Quaterniond pin_wrapper::linkOrientation(const std::string &frame_name)
 {
     try
     {
-
         pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
         Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[link_number].rotation());
         Eigen::Quaterniond tempQ;
         tempQ.w() = temp(0);
@@ -361,6 +281,27 @@ Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
     return lpose;
 }
 
+Eigen::Vector3d pin_wrapper::logMap(Eigen::Quaterniond q)
+{
+
+    Eigen::Vector3d omega;
+    omega = Eigen::Vector3d::Zero();
+
+    double temp = q.norm();
+
+    Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
+
+    double temp_ = tempV.norm();
+    tempV *= (1.000 / temp_);
+
+    omega = tempV * (2.0 * acos(q.w() / temp));
+    //omega = tempV * (2.0 * atan2(temp_,q.w()));
+    if (std::isnan(omega(0) + omega(1) + omega(2)))
+        omega = Eigen::Vector3d::Zero();
+
+    return omega;
+}
+
 Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
 {
     pinocchio::Data::Matrix6x J(6, pmodel_->nv);
@@ -370,37 +311,8 @@ Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
     pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
     try
     {
-        if (has_floating_base_)
-        {
-            // Structure of J is:
-            // [ Rworld_wrt_link*Rbase_wrt_world |
-            //   Rworld_wrt_link*skew(Pbase_wrt_world-Plink_wrt_world)*R_base_wrt_world |
-            //   Jq_wrt_link]
-            Eigen::MatrixXd Jlin;
-            Jlin.resize(3, this->ndof());
-            Jlin.setZero();
-            Eigen::Matrix3d Rbase;
-            Rbase = quaternionToRotation(q_.segment(3, 4));
-            Jlin.leftCols(3) =
-                Rbase.transpose() * data_->oMf[link_number].rotation() * J.block(0, 0, 3, 3);
-            Jlin.rightCols(ndofActuated()) =
-                (data_->oMf[link_number].rotation()) * J.block(0, 6, 3, ndofActuated());
-
-            Eigen::MatrixXd T;
-            T.resize(3, 4);
-            T << -2.0 * q_(4), 2.0 * q_(3), -2.0 * q_(6), 2.0 * q_(5),
-                -2.0 * q_(5), 2.0 * q_(6), 2.0 * q_(3), -2.0 * q_(4),
-                -2.0 * q_(6), -2.0 * q_(5), 2.0 * q_(4), 2.0 * q_(3);
-            Jlin.middleCols(3, 4) =
-                data_->oMf[link_number].rotation() * J.block(0, 3, 3, 3) * Rbase.transpose() * T;
-
-            return Jlin;
-        }
-        else
-        {
-            // Transform Jacobian from pinocchio::LOCAL frame to base frame
-            return (data_->oMf[link_number].rotation()) * J.topRows(3);
-        }
+        // Transform Jacobian from pinocchio::LOCAL frame to base frame
+        return (data_->oMf[link_number].rotation()) * J.topRows(3);
     }
     catch (std::exception &e)
     {
@@ -415,37 +327,12 @@ Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
     pinocchio::Data::Matrix6x J(6, pmodel_->nv);
     J.fill(0);
     pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
     try
     {
-        if (has_floating_base_)
-        {
-
-            Eigen::MatrixXd Jang;
-            Jang.resize(3, this->ndof());
-            Jang.setZero();
-            Eigen::Vector4d q;
-
-            // Jacobian in global frame
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-            // The structure of J is: [0 | Rot_ff_wrt_world | Jq_wrt_world]
-            Jang.rightCols(ndofActuated()) = J.block(3, 6, 3, ndofActuated());
-            q = rotationToQuaternion(J.block(3, 3, 3, 3));
-            Jang.middleCols(3, 4) << -2.0 * q(1), 2.0 * q(0), -2.0 * q(3), 2.0 * q(2),
-                -2.0 * q(2), 2.0 * q(3), 2.0 * q(0), -2.0 * q(1),
-                -2.0 * q(3), -2.0 * q(2), 2.0 * q(1), 2.0 * q(0);
-            return Jang;
-        }
-        else
-        {
-
-            // Jacobian in pinocchio::LOCAL frame
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-
-            // Transform Jacobian from pinocchio::LOCAL frame to base frame
-            return (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-        }
+        // Jacobian in pinocchio::LOCAL frame
+        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+        // Transform Jacobian from pinocchio::LOCAL frame to base frame
+        return (data_->oMf[link_number].rotation()) * J.bottomRows(3);
     }
     catch (std::exception &e)
     {
@@ -458,33 +345,9 @@ Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
 Eigen::VectorXd pin_wrapper::comPosition()
 {
     Eigen::Vector3d com;
-
-    if (has_floating_base_)
-    {
-        // Change quaternion order: in oscr it is (w,x,y,z) and in Pinocchio it is
-        // (x,y,z,w)
-        Eigen::VectorXd qpin;
-
-        qpin = q_;
-        qpin[3] = q_[4];
-        qpin[4] = q_[5];
-        qpin[5] = q_[6];
-        qpin[6] = q_[3];
-        //Eigen::Vector3d com = pinocchio::centerOfMass(*pmodel_, *data_, qpin);
-        //std::cout << qpin.head(7).transpose() << std::endl;
-        pinocchio::centerOfMass(*pmodel_, *data_, qpin);
-
-        // Eigen::Matrix3d Rbase; Rbase = quaternionToRotation(q_.segment(3,4));
-        // com = Rbase*data_->com[0];
-        com = data_->com[0];
-    }
-    else
-    {
-        //Eigen::Vector3d com = pinocchio::centerOfMass(*pmodel_, *data_, q_);
-        pinocchio::centerOfMass(*pmodel_, *data_, q_);
-        com = data_->com[0];
-    }
-
+    pinocchio::centerOfMass(*pmodel_, *data_, q_);
+    com = data_->com[0];
+    cout<<"CoM "<<com;
     return com;
 }
 
@@ -493,8 +356,8 @@ Eigen::MatrixXd pin_wrapper::comJacobian() const
     Eigen::MatrixXd Jcom;
     Jcom.setZero(3, pmodel_->nv);
 
-    Jcom = pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
-
+    pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
+    Jcom = data_->Jcom;
     return Jcom;
 }
 
@@ -518,13 +381,27 @@ void pin_wrapper::printDesiredJointData() const
 {
     std::cout << "Joint name"
               << "\t\t\t"
-              << "Joint Position"
+              << "D. Joint Position"
               << "\t\t\t\t"
-              << "Joint Velocity" << std::endl;
+              << "D. Joint Velocity" << std::endl;
 
     for (int i = 0; i < jnames_.size(); ++i)
         std::cout << jnames_[i] << "\t\t\t" << qd(i) << "\t\t\t\t" << qdotd(i) << std::endl;
 }
+
+void pin_wrapper::printActualJointData() const
+{
+    std::cout << "Joint name"
+              << "\t\t\t"
+              << "A. Joint Position"
+              << "\t\t\t\t"
+              << "A. Joint Velocity" << std::endl;
+
+    for (int i = 0; i < jnames_.size(); ++i)
+        std::cout << jnames_[i] << "\t\t\t" << q_(i) << "\t\t\t\t" << qdot_(i) << std::endl;
+}
+
+
 
 Eigen::Vector4d pin_wrapper::rotationToQuaternion(const Eigen::Matrix3d &R)
 {
@@ -571,57 +448,97 @@ Eigen::Matrix3d pin_wrapper::quaternionToRotation(const Eigen::Vector4d &q)
     return res;
 }
 
-void pin_wrapper::setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain)
+void pin_wrapper::clearTasks()
 {
-    if (task_type == 0)
+    cost = 0;
+    H.setZero(pmodel_->nv, pmodel_->nv);
+    h.setZero(pmodel_->nv);
+}
+void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt)
+{
+
+    if (task_type > 2 || task_type < 0)
     {
-        taskInit = true;
-        Eigen::MatrixXd Jac;
-        Jac.resize(3, pmodel_->nv);
-        Jac = linearJacobian(frame_name);
-        addTask(vdes, Jac, weight, gain);
-    }
-    else if (task_type == 1)
-    {
-        taskInit = true;
-        Eigen::MatrixXd Jac;
-        Jac.resize(3, pmodel_->nv);
-        Jac = angularJacobian(frame_name);
-        addTask(vdes, Jac, weight, gain);
-    }
-    else if (task_type == 2)
-    {
-        taskInit = true;
-        Eigen::MatrixXd Jac;
-        Jac.resize(3, pmodel_->nv);
-        Jac = comJacobian();
-        addTask(vdes, Jac, weight, gain);
-    }
-    else
-    {
-        taskInit = false;
         std::cout << "Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM" << std::endl;
         return;
     }
-}
 
-void pin_wrapper::addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac, double weight, double gain)
-{
-    //std::cout<<" H " <<H<<std::endl;
-    //std::cout<<" h " <<h<<std::endl;
+    Eigen::MatrixXd Jac;
+    Eigen::Vector3d v;
+    Jac.resize(3, pmodel_->nv);
 
-    Eigen::Vector3d res = vdes - Jac * qdot_;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, res.norm()) * I;
-    h += (-weight * gain * vdes.transpose() * Jac).transpose();
-}
-
-Eigen::VectorXd pin_wrapper::inverseKinematics(double dt)
-{
-
-    if (taskInit)
+    if (task_type == 0)
     {
-        lbq = gainC * (jointMinAngularLimits() - qq) / dt;
-        ubq = gainC * (jointMaxAngularLimits() - qq) / dt;
+        Jac = linearJacobian(frame_name);
+            cout<<"Linear Task "<<frame_name<<endl;
+         cout<<linkPosition(frame_name)<<endl;
+        v = (des - linkPosition(frame_name)) / dt;
+        
+    }
+    else if (task_type == 2)
+    {
+        Jac = comJacobian();
+        v = (des - comPosition()) / dt;
+    }
+    cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
+    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
+    h += (-weight * gain * v.transpose() * Jac).transpose();
+}
+
+
+void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt)
+{
+
+    if (task_type > 2 || task_type < 0)
+    {
+        std::cout << "Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM" << std::endl;
+        return;
+    }
+
+    Eigen::MatrixXd Jac;
+    Eigen::Vector3d v;
+    Jac.resize(3, pmodel_->nv);
+
+    Jac = angularJacobian(frame_name);
+    cout<<"Angular Task "<<frame_name<<endl;
+    cout<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<linkOrientation(frame_name).y()<<linkOrientation(frame_name).z()<<endl;
+    v = logMap(des * (linkOrientation(frame_name)).inverse()) / dt;
+   
+    cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
+    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
+    h += (-weight * gain * v.transpose() * Jac).transpose();
+}
+
+
+void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt)
+{
+    unsigned int i = 0;
+    while (i < ltask.size())
+    {
+        setLinearTask(ltask[i].frame_name, ltask[i].task_type, ltask[i].des, ltask[i].weight, ltask[i].gain, dt);
+        i++;
+    }
+    i = 0;
+    while (i < atask.size())
+    {
+        setAngularTask(atask[i].frame_name, atask[i].task_type, atask[i].des, atask[i].weight, atask[i].gain, dt);
+        i++;
+    }
+}
+
+Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt)
+{
+
+    unsigned int j = 0;
+    //addTasks(ltask, atask, dt);
+
+
+    while (j < 1000)
+    {
+        clearTasks();
+        addTasks(ltask, atask, dt);
+        lbq = gainC * (jointMinAngularLimits() - qd) / dt;
+        ubq = gainC * (jointMaxAngularLimits() - qd) / dt;
 
         for (unsigned int i = 0; i < pmodel_->nv; ++i)
         {
@@ -629,7 +546,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(double dt)
             ub(i) = ubq(i) < ubdq(i) ? ubq(i) : ubdq(i);
         }
 
-        //qdotd_ = H.colPivHouseholderQr().solve(-h);
+        //qdotd = H.colPivHouseholderQr().solve(-h);
         //std::cout << "Unconstrained Optimal Solution" << qdotd_ << std::endl;
         //cholesky.compute(H);
         //qdotd_ = cholesky.solve(-h);
@@ -638,23 +555,12 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(double dt)
         //L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
         //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
         qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-
-        if (position_control)
-        {
-            //Leaky Integration
-            for (unsigned int i = 0; i < pmodel_->nv; i++)
-            {
-                li[i]->add(qdotd(i), dt);
-                qd(i) = li[i]->eval();
-                i++;
-            }
-        }
-        return qdotd;
-    }
-    else
-    {
-        std::cout << "No Tasks Defined to solve for" << std::endl;
-        qdotd.setZero(pmodel_->nv);
-        return qdotd;
-    }
+        qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
+        //qd = q_+qdotd*dt;
+        cout<<"cost "<<cost<<endl;
+        //forwardKinematics(qd, qdotd);
+        //clearTasks();
+        j++;
+    }   
+    return qdotd;
 }

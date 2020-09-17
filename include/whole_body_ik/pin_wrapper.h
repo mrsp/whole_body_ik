@@ -50,6 +50,22 @@
 #include <whole_body_ik/LeakyIntegrator.h>
 using namespace std;
 
+struct linearTask {
+    std::string frame_name;
+    int task_type;
+    Eigen::Vector3d des;
+    double weight;
+    double gain;
+};
+
+struct angularTask {
+    std::string frame_name;
+    int task_type;
+    Eigen::Quaterniond des;
+    double weight;
+    double gain;
+};
+
 class pin_wrapper
 {
 
@@ -61,12 +77,12 @@ private:
     bool has_floating_base_;
     qpmad::Solver solver;
     qpmad::SolverParameters solver_params;
-    double lm_damping = 5e-3;
+    double lm_damping = 1e-3;
     double gainC = 0.5;
+    double cost;
     Eigen::MatrixXd I;
     Eigen::VectorXd qdotd, qdotd_, qd;
-    Eigen::MatrixXd H;
-    Eigen::VectorXd h;
+    int iters;
     Eigen::MatrixXd A;
     Eigen::VectorXd Alb;
     Eigen::VectorXd Aub;
@@ -74,15 +90,21 @@ private:
     Eigen::VectorXd ub, ubdq, ubq;
     Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
     Eigen::MatrixXd L_choleksy;
-    LeakyIntegrator **li;
-    bool taskInit = false;
-    bool position_control;
+    void clearTasks();
+    void setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt);
+    void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt);
+    void forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel);
+    Eigen::Vector3d logMap(Eigen::Quaterniond q);
+    void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt);
+
 
 public:
+    Eigen::MatrixXd H;
+    Eigen::VectorXd h;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     Eigen::VectorXd qq;
     pin_wrapper(const std::string &model_name, const bool &has_floating_base, const bool &verbose = false);
-    bool initialized;
+
     inline int ndof() const
     {
         return pmodel_->nq;
@@ -108,6 +130,7 @@ public:
     double getQdotd(const std::string &jname) const;
 
     double getQd(const std::string &jname) const;
+    void printActualJointData() const;
 
     void printDesiredJointData() const;
     void updateJointConfig(const std::vector<std::string> &jnames_,
@@ -124,7 +147,6 @@ public:
     {
         return angularJacobian(frame_name) * qn;
     }
-    void setPoistionControl(double leak_rate);
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
                           const std::vector<double> &qdotvec);
@@ -194,15 +216,13 @@ public:
 
     Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
 
-    void setTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, double weight, double gain);
-
-    void addTask(Eigen::Vector3d vdes, Eigen::MatrixXd Jac, double weight, double gain);
+  
 
     inline void setContraintGain(double gainC_)
     {
         gainC = gainC_;
     }
 
-    Eigen::VectorXd inverseKinematics(double dt);
+    Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt);
 };
 #endif
