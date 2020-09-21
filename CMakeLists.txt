@@ -16,7 +16,7 @@ find_package(Boost REQUIRED COMPONENTS system)
 
 find_package(qpmad)
 
-
+find_package(Eigen3 REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PINOCCHIO pinocchio REQUIRED)
@@ -35,7 +35,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES whole_body_ik
   CATKIN_DEPENDS roscpp sensor_msgs control_msgs actionlib whole_body_ik_msgs
-  DEPENDS Eigen3 pinocchio qpmad
+  DEPENDS EIGEN3 PINOCCHIO qpmad
 )
 ###########
 ## Build ##
@@ -46,7 +46,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${Eigen3_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
   ${PINOCCHIO_INCLUDE_DIRS}
   ${qpmad_INCLUDE_DIRS}
 )
@@ -66,6 +66,6 @@ SET(cpp_src
 add_executable(whole_body_ik_node ${cpp_src})
 
 
-target_link_libraries(whole_body_ik_node ${catkin_LIBRARIES} ${Eigen3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
+target_link_libraries(whole_body_ik_node ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 target_compile_definitions(whole_body_ik_node PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
 add_dependencies(whole_body_ik_node  ${catkin_EXPORTED_TARGETS})
