@@ -347,7 +347,6 @@ Eigen::VectorXd pin_wrapper::comPosition()
     Eigen::Vector3d com;
     pinocchio::centerOfMass(*pmodel_, *data_, q_);
     com = data_->com[0];
-    cout<<"CoM "<<com;
     return com;
 }
 
@@ -470,16 +469,21 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     if (task_type == 0)
     {
         Jac = linearJacobian(frame_name);
-            cout<<"Linear Task "<<frame_name<<endl;
-         cout<<linkPosition(frame_name)<<endl;
+        cout<<"Frame \n"<<frame_name<<endl;
+        cout<<"des \n"<<des<<endl;
+        cout<<"actual \n"<<linkPosition(frame_name)<<endl;
+
         v = (des - linkPosition(frame_name)) / dt;
-        
     }
     else if (task_type == 2)
     {
         Jac = comJacobian();
+        cout<<"Frame \n"<<"CoM"<<endl;
+        cout<<"des \n"<<des<<endl;
+        cout<<"actual \n"<<comPosition()<<endl;
         v = (des - comPosition()) / dt;
     }
+    cout<<"Linear Task v \n"<<v<<endl;
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
     h += (-weight * gain * v.transpose() * Jac).transpose();
@@ -500,10 +504,12 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     Jac.resize(3, pmodel_->nv);
 
     Jac = angularJacobian(frame_name);
-    cout<<"Angular Task "<<frame_name<<endl;
-    cout<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<linkOrientation(frame_name).y()<<linkOrientation(frame_name).z()<<endl;
+    cout<<"Frame \n"<<frame_name<<endl;
+    cout<<"des \n"<<des.w()<<" "<<des.x()<<" "<<des.y()<<" "<<des.z() <<endl;
+    cout<<"actual \n"<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<" "<<linkOrientation(frame_name).y()<<" "<<linkOrientation(frame_name).z() <<endl;
     v = logMap(des * (linkOrientation(frame_name)).inverse()) / dt;
-   
+    cout<<"Amgular Task v \n"<<v<<endl;
+
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
     h += (-weight * gain * v.transpose() * Jac).transpose();
@@ -533,8 +539,8 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //addTasks(ltask, atask, dt);
 
 
-    while (j < 1000)
-    {
+    // while (j < 1000)
+    // {
         clearTasks();
         addTasks(ltask, atask, dt);
         lbq = gainC * (jointMinAngularLimits() - qd) / dt;
@@ -560,7 +566,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         cout<<"cost "<<cost<<endl;
         //forwardKinematics(qd, qdotd);
         //clearTasks();
-        j++;
-    }   
+    //     j++;
+    // }   
     return qdotd;
 }
