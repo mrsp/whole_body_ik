@@ -15,6 +15,7 @@ int main(int argc, char **argv)
     talos* tl;
     tl = new talos(n);
     tl->run();
+    ros::spin();
     //Done here
     ROS_INFO("Quitting... ");
     delete tl;

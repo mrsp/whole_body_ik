@@ -73,15 +73,14 @@ private:
     pinocchio::Model *pmodel_;
     pinocchio::Data *data_;
     std::vector<std::string> jnames_;
-    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qn;
+    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qd, qdotd;
     bool has_floating_base_;
     qpmad::Solver solver;
     qpmad::SolverParameters solver_params;
-    double lm_damping = 1e-3;
-    double gainC = 0.5;
-    double cost;
+    double lm_damping;
+    double gainC;
+    double cost, cost_;
     Eigen::MatrixXd I;
-    Eigen::VectorXd qdotd, qdotd_, qd;
     int iters;
     Eigen::MatrixXd A;
     Eigen::VectorXd Alb;
@@ -112,11 +111,7 @@ public:
 
     inline int ndofActuated() const
     {
-        if (has_floating_base_)
-            // Eliminate the Cartesian position and orientation (quaternion)
-            return pmodel_->nq - 7;
-        else
-            return pmodel_->nq;
+            return pmodel_->nv;
     }
 
     void getJointData(const std::vector<std::string> &jnames_,
@@ -138,15 +133,7 @@ public:
                            const std::vector<double> &qdotvec,
                            double joint_std = 0);
 
-    inline Eigen::Vector3d getLinearVelocityNoise(const std::string &frame_name)
-    {
-        return linearJacobian(frame_name) * qn;
-    }
-
-    inline Eigen::Vector3d getAngularVelocityNoise(const std::string &frame_name)
-    {
-        return angularJacobian(frame_name) * qn;
-    }
+   
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
                           const std::vector<double> &qdotvec);
@@ -155,12 +142,12 @@ public:
 
     inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
     {
-        return (linearJacobian(frame_name) * qdot_);
+        return (linearJacobian(frame_name) * qdotd);
     }
 
     inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
     {
-        return (angularJacobian(frame_name) * qdot_);
+        return (angularJacobian(frame_name) * qdotd);
     }
 
     Eigen::Vector3d linkPosition(const std::string &frame_name);
@@ -215,13 +202,6 @@ public:
     Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
 
     Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
-
-  
-
-    inline void setContraintGain(double gainC_)
-    {
-        gainC = gainC_;
-    }
 
     Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt);
 };

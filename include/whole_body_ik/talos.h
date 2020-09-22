@@ -43,7 +43,7 @@ public:
     ~talos();
     talos(ros::NodeHandle nh_);
     void controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg);
-    void joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg);
+    void joint_stateCb(const sensor_msgs::JointStateConstPtr &msg);
     void run();
     void walking();
 };

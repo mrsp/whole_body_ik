@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+<node pkg="whole_body_ik" type="whole_body_ik_node" name="whole_body_ik" respawn="false" output="screen" />
+<node pkg="lipm_motion" type="lipm_motion_node" name="lipm_motion" respawn="false" output="screen" />
+<node pkg="lipm_control" type="lipm_control_node" name="lipm_control" respawn="false" output="screen" />
+</launch>

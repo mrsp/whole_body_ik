@@ -44,10 +44,6 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     qmin_.resize(jnames_.size());
     qmax_.resize(jnames_.size());
     dqmax_.resize(jnames_.size());
-    qn.resize(jnames_.size());
-    qn.setZero();
-    qq.resize(jnames_.size());
-    qq.setZero();
     qmin_ = pmodel_->lowerPositionLimit;
     qmax_ = pmodel_->upperPositionLimit;
     dqmax_ = pmodel_->velocityLimit;
@@ -71,12 +67,16 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     h.setZero(pmodel_->nv);
     qdotd.setZero(pmodel_->nv);
     qd.setZero(pmodel_->nv);
-    qdotd_.setZero(pmodel_->nv);
+    q_.setZero(pmodel_->nv);
     iters = 1000;
+    lm_damping = 1e-4;
+    gainC = 0.5;
     //Not used in QP
     A.resize(0, 0);
     Alb.resize(0);
     Aub.resize(0);
+    cost = 0;
+    cost_ = 0;
     //Joint Angle Constraints
     lbq.resize(pmodel_->nv);
     ubq.resize(pmodel_->nv);
@@ -97,56 +97,53 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     std::cout << "Model loaded: " << model_name << std::endl;
 }
 
-void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames_,
+void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
                                     const std::vector<double> &qvec,
                                     const std::vector<double> &qdotvec,
                                     double joint_std)
 {
+    mapJointNamesIDs(jnames, qvec, qdotvec);
+    pinocchio::framesForwardKinematics(*pmodel_, *data_, qd);
+    pinocchio::computeJointJacobians(*pmodel_, *data_, qd);
 
-    mapJointNamesIDs(jnames_, qvec, qdotvec);
-    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
-    pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-    qd = q_;
-    qdotd = qdot_;
 }
 
 void pin_wrapper::forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel)
 {
     pinocchio::framesForwardKinematics(*pmodel_, *data_, pin_joint_pos);
-    pinocchio::computeJointJacobians(*pmodel_, *data_, pin_joint_vel);
+    pinocchio::computeJointJacobians(*pmodel_, *data_, pin_joint_pos);
 }
 
-void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames_,
+void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
                                    const std::vector<double> &qvec,
                                    const std::vector<double> &qdotvec)
 {
-    assert(qvec.size() == jnames_.size() && qdotvec.size() == jnames_.size());
+    assert(qvec.size() == jnames.size() && qdotvec.size() == jnames.size());
 
-    q_.setZero(pmodel_->nq);
-    qdot_.setZero(pmodel_->nv);
-    qq.setZero(pmodel_->nv);
+    // q_.setZero(pmodel_->nv);
+    // qd.setZero(pmodel_->nv);
+    // qdotd.setZero(pmodel_->nv);
 
-    for (int i = 0; i < jnames_.size(); i++)
+    for (int i = 0; i < jnames.size(); i++)
     {
-        int jidx = pmodel_->getJointId(jnames_[i]);
+        int jidx = pmodel_->getJointId(jnames[i]);
         int qidx = pmodel_->idx_qs[jidx];
         int vidx = pmodel_->idx_vs[jidx];
 
         //this value is equal to 2 for continuous joints
         if (pmodel_->nqs[jidx] == 2)
         {
-            q_[qidx] = cos(qvec[i]);
-            q_[qidx + 1] = sin(qvec[i]);
-            qdot_[vidx] = qdotvec[i];
-            qq[vidx] = qvec[i];
+            qd[qidx] = cos(qvec[i]);
+            qd[qidx + 1] = sin(qvec[i]);
+            qdotd[vidx] = qdotvec[i];
         }
         else
         {
-            q_[qidx] = qvec[i];
-            qdot_[vidx] = qdotvec[i];
-            qq[vidx] = qvec[i];
+            qd[vidx] = qvec[i];
+            qdotd[vidx] = qdotvec[i];
         }
     }
+    q_ = qd;
 }
 
 void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
@@ -163,8 +160,8 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
         int jidx = pmodel_->getJointId(jnames_[i]);
         int vidx = pmodel_->idx_vs[jidx];
 
-        qvec[i] = qq[vidx];
-        qdotvec[i] = qdot_[vidx];
+        qvec[i] = qd[vidx];
+        qdotvec[i] = qdotd[vidx];
     }
 }
 
@@ -187,13 +184,6 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames_,
     }
 }
 
-double pin_wrapper::getQq(const std::string &jname) const
-{
-    int jidx = pmodel_->getJointId(jname);
-    int vidx = pmodel_->idx_vs[jidx];
-
-    return qq[vidx];
-}
 
 double pin_wrapper::getQdotd(const std::string &jname) const
 {
@@ -281,20 +271,20 @@ Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
     return lpose;
 }
 
-Eigen::Vector3d pin_wrapper::logMap(Eigen::Quaterniond q)
+Eigen::Vector3d pin_wrapper::logMap(Eigen::Quaterniond quat)
 {
 
     Eigen::Vector3d omega;
     omega = Eigen::Vector3d::Zero();
 
-    double temp = q.norm();
+    double temp = quat.norm();
 
-    Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
+    Eigen::Vector3d tempV = Eigen::Vector3d(quat.x(), quat.y(), quat.z());
 
     double temp_ = tempV.norm();
     tempV *= (1.000 / temp_);
 
-    omega = tempV * (2.0 * acos(q.w() / temp));
+    omega = tempV * (2.0 * acos(quat.w() / temp));
     //omega = tempV * (2.0 * atan2(temp_,q.w()));
     if (std::isnan(omega(0) + omega(1) + omega(2)))
         omega = Eigen::Vector3d::Zero();
@@ -345,7 +335,7 @@ Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
 Eigen::VectorXd pin_wrapper::comPosition()
 {
     Eigen::Vector3d com;
-    pinocchio::centerOfMass(*pmodel_, *data_, q_);
+    pinocchio::centerOfMass(*pmodel_, *data_, qd);
     com = data_->com[0];
     return com;
 }
@@ -355,7 +345,7 @@ Eigen::MatrixXd pin_wrapper::comJacobian() const
     Eigen::MatrixXd Jcom;
     Jcom.setZero(3, pmodel_->nv);
 
-    pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
+    pinocchio::jacobianCenterOfMass(*pmodel_, *data_, qd);
     Jcom = data_->Jcom;
     return Jcom;
 }
@@ -397,7 +387,7 @@ void pin_wrapper::printActualJointData() const
               << "A. Joint Velocity" << std::endl;
 
     for (int i = 0; i < jnames_.size(); ++i)
-        std::cout << jnames_[i] << "\t\t\t" << q_(i) << "\t\t\t\t" << qdot_(i) << std::endl;
+        std::cout << jnames_[i] << "\t\t\t" << qd(i) << "\t\t\t\t" << qdotd(i) << std::endl;
 }
 
 
@@ -449,6 +439,7 @@ Eigen::Matrix3d pin_wrapper::quaternionToRotation(const Eigen::Vector4d &q)
 
 void pin_wrapper::clearTasks()
 {
+    cost_ = cost;
     cost = 0;
     H.setZero(pmodel_->nv, pmodel_->nv);
     h.setZero(pmodel_->nv);
@@ -469,23 +460,22 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     if (task_type == 0)
     {
         Jac = linearJacobian(frame_name);
-        cout<<"Frame \n"<<frame_name<<endl;
-        cout<<"des \n"<<des<<endl;
-        cout<<"actual \n"<<linkPosition(frame_name)<<endl;
+        // cout<<"Frame \n"<<frame_name<<endl;
+        // cout<<"des \n"<<des<<endl;
+        // cout<<"actual \n"<<linkPosition(frame_name)<<endl;
 
         v = (des - linkPosition(frame_name)) / dt;
     }
     else if (task_type == 2)
     {
         Jac = comJacobian();
-        cout<<"Frame \n"<<"CoM"<<endl;
-        cout<<"des \n"<<des<<endl;
-        cout<<"actual \n"<<comPosition()<<endl;
+        // cout<<"Frame \n"<<"CoM"<<endl;
+        // cout<<"des \n"<<des<<endl;
+        // cout<<"actual \n"<<comPosition()<<endl;
         v = (des - comPosition()) / dt;
     }
-    cout<<"Linear Task v \n"<<v<<endl;
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
+    H += weight * Jac.transpose() * Jac + lm_damping   * I; //fmax(lm_damping, v.norm())
     h += (-weight * gain * v.transpose() * Jac).transpose();
 }
 
@@ -504,11 +494,10 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     Jac.resize(3, pmodel_->nv);
 
     Jac = angularJacobian(frame_name);
-    cout<<"Frame \n"<<frame_name<<endl;
-    cout<<"des \n"<<des.w()<<" "<<des.x()<<" "<<des.y()<<" "<<des.z() <<endl;
-    cout<<"actual \n"<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<" "<<linkOrientation(frame_name).y()<<" "<<linkOrientation(frame_name).z() <<endl;
+    // cout<<"Frame \n"<<frame_name<<endl;
+    // cout<<"des \n"<<des.w()<<" "<<des.x()<<" "<<des.y()<<" "<<des.z() <<endl;
+    // cout<<"actual \n"<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<" "<<linkOrientation(frame_name).y()<<" "<<linkOrientation(frame_name).z() <<endl;
     v = logMap(des * (linkOrientation(frame_name)).inverse()) / dt;
-    cout<<"Amgular Task v \n"<<v<<endl;
 
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
@@ -523,12 +512,14 @@ void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTas
     {
         setLinearTask(ltask[i].frame_name, ltask[i].task_type, ltask[i].des, ltask[i].weight, ltask[i].gain, dt);
         i++;
+
     }
     i = 0;
     while (i < atask.size())
     {
         setAngularTask(atask[i].frame_name, atask[i].task_type, atask[i].des, atask[i].weight, atask[i].gain, dt);
         i++;
+
     }
 }
 
@@ -539,8 +530,8 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //addTasks(ltask, atask, dt);
 
 
-    // while (j < 1000)
-    // {
+    while (j < 5000)
+    {
         clearTasks();
         addTasks(ltask, atask, dt);
         lbq = gainC * (jointMinAngularLimits() - qd) / dt;
@@ -561,12 +552,12 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         //L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
         //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
         qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-        qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
-        //qd = q_+qdotd*dt;
-        cout<<"cost "<<cost<<endl;
-        //forwardKinematics(qd, qdotd);
-        //clearTasks();
-    //     j++;
-    // }   
+        qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
+        cout<<"cost "<<fabs((cost - cost_)/cost_)<<endl;
+        if( fabs((cost - cost_)/cost_) < 1.0e-4)
+            break;
+        forwardKinematics(qd, qdotd);
+        j++;
+    }   
     return qdotd;
 }

@@ -42,7 +42,7 @@ talos::talos(ros::NodeHandle nh_)
     ros::Duration(0.5).sleep();
     walking();
 }
-void talos::joint_stateCb(const sensor_msgs::JointState::ConstPtr &msg)
+void talos::joint_stateCb(const sensor_msgs::JointStateConstPtr &msg)
 {
     joint_inc = true;
     if(firstJointCb)
@@ -185,12 +185,6 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     angularTask atask;
     std::vector<linearTask> ltaskVec;
     std::vector<angularTask> ataskVec;
-    //Define Tasks
-    double wh = 1000.0;
-    double wm = 10.0;
-    double wl = 1.0;
-
-
 
 
     //Define Tasks for Whole Body Control
