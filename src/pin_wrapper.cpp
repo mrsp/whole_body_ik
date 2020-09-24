@@ -69,8 +69,8 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     qd.setZero(pmodel_->nv);
     q_.setZero(pmodel_->nv);
     iters = 1000;
-    lm_damping = 1e-4;
-    gainC = 0.5;
+    lm_damping = 1e-3;
+    gainC = 0.65;
     //Not used in QP
     A.resize(0, 0);
     Alb.resize(0);
@@ -475,7 +475,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         v = (des - comPosition()) / dt;
     }
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping   * I; //fmax(lm_damping, v.norm())
+    H += weight * Jac.transpose() * Jac + lm_damping*fmax(lm_damping, v.norm())   * I; //fmax(lm_damping, v.norm())
     h += (-weight * gain * v.transpose() * Jac).transpose();
 }
 
@@ -498,7 +498,8 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     // cout<<"des \n"<<des.w()<<" "<<des.x()<<" "<<des.y()<<" "<<des.z() <<endl;
     // cout<<"actual \n"<<linkOrientation(frame_name).w()<<" "<<linkOrientation(frame_name).x()<<" "<<linkOrientation(frame_name).y()<<" "<<linkOrientation(frame_name).z() <<endl;
     v = logMap(des * (linkOrientation(frame_name)).inverse()) / dt;
-
+    //v = (des.toRotationMatrix().eulerAngles(0, 1, 2) - linkOrientation(frame_name).toRotationMatrix().eulerAngles(0, 1, 2))/2
+    //cout<<"Error "<<v<<endl;
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
     h += (-weight * gain * v.transpose() * Jac).transpose();
@@ -553,8 +554,8 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
         qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
         qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
-        cout<<"cost "<<fabs((cost - cost_)/cost_)<<endl;
-        if( fabs((cost - cost_)/cost_) < 1.0e-4)
+       // cout<<"cost "<<fabs((cost - cost_)/cost_)<<endl;
+        if( fabs((cost - cost_)/cost_) < 1.0e-3)
             break;
         forwardKinematics(qd, qdotd);
         j++;

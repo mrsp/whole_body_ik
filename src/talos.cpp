@@ -8,6 +8,8 @@ talos::talos(ros::NodeHandle nh_)
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
     n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
     n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
+    //n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
+    //n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
     n_p.param<std::string>("arm_left_7_link", lhand_frame, "arm_left_7_link");
     n_p.param<std::string>("arm_right_7_link", rhand_frame, "arm_right_7_link");
     n_p.param<std::string>("rgbd_link", head_frame, "head_2_link");
@@ -252,7 +254,13 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     }
     if(msg->Torso.angular_task.weight > 0 && msg->Torso.angular_task.gain > 0)
     {
-        atask.frame_name = base_link_frame;
+        atask.frame_name = "torso_1_link";
+        atask.des = Eigen::Quaterniond(msg->Torso.angular_task.des.w, msg->Torso.angular_task.des.x, msg->Torso.angular_task.des.y, msg->Torso.angular_task.des.z);
+        atask.weight = msg->Torso.angular_task.weight;
+        atask.gain = msg->Torso.angular_task.gain;
+        atask.task_type = 1; 
+
+        atask.frame_name = "torso_2_link";
         atask.des = Eigen::Quaterniond(msg->Torso.angular_task.des.w, msg->Torso.angular_task.des.x, msg->Torso.angular_task.des.y, msg->Torso.angular_task.des.z);
         atask.weight = msg->Torso.angular_task.weight;
         atask.gain = msg->Torso.angular_task.gain;
