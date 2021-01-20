@@ -65,7 +65,13 @@ struct angularTask {
     double weight;
     double gain;
 };
-
+struct dofTask {
+    std::string joint_name;
+    int task_type;
+    double des;
+    double weight;
+    double gain;
+};
 class pin_wrapper
 {
 
@@ -91,10 +97,11 @@ private:
     Eigen::MatrixXd L_choleksy;
     void clearTasks();
     void setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt);
-    void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt);
+    void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask,  double dt);
     void forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel);
     Eigen::Vector3d logMap(Eigen::Quaterniond q);
     void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt);
+    void setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt);
 
 
 public:
@@ -125,8 +132,8 @@ public:
     double getQdotd(const std::string &jname) const;
 
     double getQd(const std::string &jname) const;
+    int getJointId(const std::string &jname) const;
     void printActualJointData() const;
-
     void printDesiredJointData() const;
     void updateJointConfig(const std::vector<std::string> &jnames_,
                            const std::vector<double> &qvec,
@@ -203,6 +210,6 @@ public:
 
     Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
 
-    Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt);
+    Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask,std::vector<dofTask> dtask, double dt);
 };
 #endif

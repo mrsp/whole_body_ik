@@ -4,12 +4,12 @@ talos::talos(ros::NodeHandle nh_)
 {
     nh = nh_;
     ros::NodeHandle n_p("~");
-    n_p.param<std::string>("modelname", modelname, "/home/master/talos_walk_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
+    n_p.param<std::string>("modelname", modelname, "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
-    n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
-    n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
-    //n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
-    //n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
+    //n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
+    //n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
+    n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
+    n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
     n_p.param<std::string>("arm_left_7_link", lhand_frame, "arm_left_7_link");
     n_p.param<std::string>("arm_right_7_link", rhand_frame, "arm_right_7_link");
     n_p.param<std::string>("rgbd_link", head_frame, "head_2_link");
@@ -42,7 +42,7 @@ talos::talos(ros::NodeHandle nh_)
     as_->start();
     std::cout<<"Talos Whole Body Control Server Online"<<std::endl;
     ros::Duration(0.5).sleep();
-    walking();
+    //walking();
 }
 void talos::joint_stateCb(const sensor_msgs::JointStateConstPtr &msg)
 {
@@ -69,6 +69,7 @@ void talos::run()
             //Update Joint_states in Pinocchio
             pin->updateJointConfig(joint_names, joint_positions, joint_velocities);
             joint_inc = false;
+            cout<<"Joints Received "<<endl;
         }
         rate.sleep();
         ros::spinOnce();
@@ -180,17 +181,31 @@ void talos::walking()
 
 }
 
+
+
+
 void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
 {
     std::cout<<"Received "<<std::endl;
     linearTask ltask;
     angularTask atask;
+    dofTask dtask;
     std::vector<linearTask> ltaskVec;
     std::vector<angularTask> ataskVec;
-
+    std::vector<dofTask> dtaskVec;
 
     //Define Tasks for Whole Body Control
-
+    unsigned int j = 0;
+    while(j<msg->Joints.size())
+    {
+        dtask.joint_name = msg->Joints[j].dof_task.name;
+        dtask.des = msg->Joints[j].dof_task.des;
+        dtask.weight = msg->Joints[j].dof_task.weight;
+        dtask.gain = msg->Joints[j].dof_task.gain;
+        dtask.task_type = 3; 
+        dtaskVec.push_back(dtask); 
+        j++;
+    }
     //Left Foot Task
     if( msg->LLeg.linear_task.weight >0 && msg->LLeg.linear_task.gain > 0)
     {
@@ -326,7 +341,7 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
         ataskVec.push_back(atask); 
     }
 
-    pin->inverseKinematics(ltaskVec,ataskVec,msg->dt);
+    pin->inverseKinematics(ltaskVec,ataskVec,dtaskVec,msg->dt);
     pin->printDesiredJointData();
 
     //Send Desired Joints to Talos

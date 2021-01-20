@@ -193,12 +193,21 @@ double pin_wrapper::getQdotd(const std::string &jname) const
     return qdotd(vidx);
 }
 
+
 double pin_wrapper::getQd(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
     int vidx = pmodel_->idx_vs[jidx];
 
     return qd(vidx);
+}
+
+int pin_wrapper::getJointId(const std::string &jname) const
+{
+    int jidx = pmodel_->getJointId(jname);
+    int vidx = pmodel_->idx_vs[jidx];
+
+    return vidx;
 }
 
 Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)
@@ -447,7 +456,7 @@ void pin_wrapper::clearTasks()
 void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt)
 {
 
-    if (task_type > 2 || task_type < 0)
+    if (task_type > 3 || task_type < 0)
     {
         std::cout << "Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM" << std::endl;
         return;
@@ -475,7 +484,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         v = (des - comPosition()) / dt;
     }
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping*fmax(lm_damping, v.norm())   * I; //fmax(lm_damping, v.norm())
+    H += weight * Jac.transpose() * Jac;// + lm_damping*fmax(lm_damping, v.norm())   * I; //fmax(lm_damping, v.norm())
     h += (-weight * gain * v.transpose() * Jac).transpose();
 }
 
@@ -483,7 +492,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
 void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt)
 {
 
-    if (task_type > 2 || task_type < 0)
+    if (task_type > 3 || task_type < 0)
     {
         std::cout << "Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM" << std::endl;
         return;
@@ -501,12 +510,42 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //v = (des.toRotationMatrix().eulerAngles(0, 1, 2) - linkOrientation(frame_name).toRotationMatrix().eulerAngles(0, 1, 2))/2
     //cout<<"Error "<<v<<endl;
     cost += (Jac * qdotd - gain * v).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v.norm()) * I;
+    H += weight * Jac.transpose() * Jac;// + lm_damping * fmax(lm_damping, v.norm()) * I;
     h += (-weight * gain * v.transpose() * Jac).transpose();
 }
+void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt)
+{
 
+    if (task_type > 3 || task_type < 0)
+    {
+        std::cout << "Wrong Task Type: 0 for linear / 1 for angular / 2 for CoM / 3 for DOF " << std::endl;
+        return;
+    }
 
-void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt)
+    Eigen::MatrixXd Jac;
+    double v, qqdes, qq, qqdot;
+    Jac.resize(1, pmodel_->nv);
+
+    Jac.setZero();
+  
+
+    int idx = getJointId(joint_name);
+
+    Jac(0,idx) = 1;
+    qq = getQd(joint_name);
+    qqdes = des;
+    v = (qqdes - qq)/ dt;
+
+    qqdot = getQdotd(joint_name);
+    double cost__ = ( qqdot - gain * v)*( qqdot - gain * v) * weight;
+    cost += cost__;
+    std::cout<<"Joint "<<joint_name<<"Id "<<idx<<" Data "<<qq<<" "<<qqdot<<" Des "<<qqdes<<" Cost "<<cost__<<std::endl;
+    std::cout<<"weight  "<<Jac<<"gain "<<v<<std::endl;
+    H += weight * Jac.transpose() * Jac; //+ lm_damping * fmax(lm_damping, v*v) * I;
+    h += (-weight * gain * v * Jac).transpose();
+}
+
+void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask,  double dt)
 {
     unsigned int i = 0;
     while (i < ltask.size())
@@ -522,9 +561,15 @@ void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTas
         i++;
 
     }
+    i = 0;
+    while (i < dtask.size())
+    {
+        setDOFTask(dtask[i].joint_name, dtask[i].task_type, dtask[i].des, dtask[i].weight, dtask[i].gain, dt);
+        i++;
+    }
 }
 
-Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, double dt)
+Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask,  std::vector<dofTask> dtask, double dt)
 {
 
     unsigned int j = 0;
@@ -534,7 +579,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     while (j < 5000)
     {
         clearTasks();
-        addTasks(ltask, atask, dt);
+        addTasks(ltask, atask, dtask, dt);
         lbq = gainC * (jointMinAngularLimits() - qd) / dt;
         ubq = gainC * (jointMaxAngularLimits() - qd) / dt;
 
@@ -555,7 +600,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
         qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
        // cout<<"cost "<<fabs((cost - cost_)/cost_)<<endl;
-        if( fabs((cost - cost_)/cost_) < 1.0e-3)
+        if( fabs((cost - cost_)/cost_) < 1.0e-6)
             break;
         forwardKinematics(qd, qdotd);
         j++;
