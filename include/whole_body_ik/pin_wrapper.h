@@ -79,7 +79,7 @@ private:
     pinocchio::Model *pmodel_;
     pinocchio::Data *data_;
     std::vector<std::string> jnames_;
-    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qd, qdotd;
+    Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qd, qdotd;
     bool has_floating_base_;
     qpmad::Solver solver;
     qpmad::SolverParameters solver_params;
@@ -98,11 +98,12 @@ private:
     void clearTasks();
     void setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt);
     void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask,  double dt);
+    void addReguralization();
     void forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel);
     Eigen::Vector3d logMap(Eigen::Quaterniond q);
     void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt);
     void setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt);
-
+    bool jointDataReceived;
 
 public:
     Eigen::MatrixXd H;
@@ -127,7 +128,8 @@ public:
     void getDesiredJointData(const std::vector<std::string> &jnames_,
                              std::vector<double> &qvec,
                              std::vector<double> &qdotvec);
-    double getQq(const std::string &jname) const;
+    double getQ(const std::string &jname) const;
+    double getQdot(const std::string &jname) const;
 
     double getQdotd(const std::string &jname) const;
 

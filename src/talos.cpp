@@ -13,7 +13,7 @@ talos::talos(ros::NodeHandle nh_)
     n_p.param<std::string>("arm_left_7_link", lhand_frame, "arm_left_7_link");
     n_p.param<std::string>("arm_right_7_link", rhand_frame, "arm_right_7_link");
     n_p.param<std::string>("rgbd_link", head_frame, "head_2_link");
-    n_p.param<double>("joint_freq", joint_freq, 50.0);
+    n_p.param<double>("joint_freq", joint_freq, 1000.0);
 
     //Initialize the Pinocchio Wrapper
      pin = new pin_wrapper(modelname, false);
@@ -61,7 +61,7 @@ void talos::joint_stateCb(const sensor_msgs::JointStateConstPtr &msg)
 }
 void talos::run()
 {
-    static ros::Rate rate(2.0 * joint_freq);
+    static ros::Rate rate( joint_freq);
     while (ros::ok())
     {
         if (joint_inc)
@@ -69,7 +69,7 @@ void talos::run()
             //Update Joint_states in Pinocchio
             pin->updateJointConfig(joint_names, joint_positions, joint_velocities);
             joint_inc = false;
-            cout<<"Joints Received "<<endl;
+            //cout<<"Joints Received "<<endl;
         }
         rate.sleep();
         ros::spinOnce();
@@ -110,7 +110,7 @@ void talos::walking()
     ac_torso->sendGoal(torso_goal);
     //Left Arm Joint Controller
     control_msgs::FollowJointTrajectoryGoal larm_goal;
-    larm_goal.goal_time_tolerance = ros::Duration(2.0 * dt);
+    larm_goal.goal_time_tolerance = ros::Duration( dt);
     larm_goal.trajectory.header.stamp = ros::Time::now();
     larm_goal.trajectory.joint_names = {"arm_left_1_joint", "arm_left_2_joint", "arm_left_3_joint", "arm_left_4_joint", "arm_left_5_joint", "arm_left_6_joint", "arm_left_7_joint"};
     trajectory_msgs::JointTrajectoryPoint larm_point;
@@ -128,7 +128,7 @@ void talos::walking()
     ac_leftarm->sendGoal(larm_goal);
     //Right Arm Joint Controller
     control_msgs::FollowJointTrajectoryGoal rarm_goal;
-    rarm_goal.goal_time_tolerance = ros::Duration(2.0 * dt);
+    rarm_goal.goal_time_tolerance = ros::Duration( dt);
     rarm_goal.trajectory.header.stamp = ros::Time::now();
     rarm_goal.trajectory.joint_names = {"arm_right_1_joint", "arm_right_2_joint", "arm_right_3_joint", "arm_right_4_joint", "arm_right_5_joint", "arm_right_6_joint", "arm_right_7_joint"};
     trajectory_msgs::JointTrajectoryPoint rarm_point;
@@ -163,7 +163,7 @@ void talos::walking()
     ac_leftleg->sendGoal(lleg_goal);
     //Right Leg Joint Controller
     control_msgs::FollowJointTrajectoryGoal rleg_goal;
-    rleg_goal.goal_time_tolerance = ros::Duration(2.0 * dt);
+    rleg_goal.goal_time_tolerance = ros::Duration( dt);
     rleg_goal.trajectory.header.stamp = ros::Time::now();
     rleg_goal.trajectory.joint_names = {"leg_right_1_joint", "leg_right_2_joint", "leg_right_3_joint", "leg_right_4_joint", "leg_right_5_joint", "leg_right_6_joint"};
     trajectory_msgs::JointTrajectoryPoint rleg_point;
@@ -342,12 +342,12 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     }
 
     pin->inverseKinematics(ltaskVec,ataskVec,dtaskVec,msg->dt);
-    pin->printDesiredJointData();
+    //pin->printDesiredJointData();
 
     //Send Desired Joints to Talos
     //Head Joint Controller
     control_msgs::FollowJointTrajectoryGoal head_goal;
-    head_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    head_goal.goal_time_tolerance = ros::Duration( msg->dt);
     head_goal.trajectory.header.stamp = ros::Time::now();
     head_goal.trajectory.joint_names = {"head_1_joint", "head_2_joint"};
     trajectory_msgs::JointTrajectoryPoint head_point;
@@ -358,9 +358,11 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     head_goal.trajectory.points[0] = head_point;
     head_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_head->sendGoal(head_goal);
+    //ac_head->waitForResult();
+
     //Torso Joint Controller
     control_msgs::FollowJointTrajectoryGoal torso_goal;
-    torso_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    torso_goal.goal_time_tolerance = ros::Duration(msg->dt);
     torso_goal.trajectory.header.stamp = ros::Time::now();
     torso_goal.trajectory.joint_names = {"torso_1_joint", "torso_2_joint"};
     trajectory_msgs::JointTrajectoryPoint torso_point;
@@ -371,9 +373,11 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     torso_goal.trajectory.points[0] = torso_point;
     torso_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_torso->sendGoal(torso_goal);
+    //ac_torso->waitForResult();
+
     //Left Arm Joint Controller
     control_msgs::FollowJointTrajectoryGoal larm_goal;
-    larm_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    larm_goal.goal_time_tolerance = ros::Duration( msg->dt);
     larm_goal.trajectory.header.stamp = ros::Time::now();
     larm_goal.trajectory.joint_names = {"arm_left_1_joint", "arm_left_2_joint", "arm_left_3_joint", "arm_left_4_joint", "arm_left_5_joint", "arm_left_6_joint", "arm_left_7_joint"};
     trajectory_msgs::JointTrajectoryPoint larm_point;
@@ -389,9 +393,11 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     larm_goal.trajectory.points[0] = larm_point;
     larm_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_leftarm->sendGoal(larm_goal);
+    //ac_leftarm->waitForResult();
+
     //Right Arm Joint Controller
     control_msgs::FollowJointTrajectoryGoal rarm_goal;
-    rarm_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    rarm_goal.goal_time_tolerance = ros::Duration( msg->dt);
     rarm_goal.trajectory.header.stamp = ros::Time::now();
     rarm_goal.trajectory.joint_names = {"arm_right_1_joint", "arm_right_2_joint", "arm_right_3_joint", "arm_right_4_joint", "arm_right_5_joint", "arm_right_6_joint", "arm_right_7_joint"};
     trajectory_msgs::JointTrajectoryPoint rarm_point;
@@ -407,9 +413,11 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     rarm_goal.trajectory.points[0] = rarm_point;
     rarm_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_rightarm->sendGoal(rarm_goal);
+    //ac_rightarm->waitForResult();
+
     //Left Leg Joint Controller
     control_msgs::FollowJointTrajectoryGoal lleg_goal;
-    lleg_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    lleg_goal.goal_time_tolerance = ros::Duration( msg->dt);
     lleg_goal.trajectory.header.stamp = ros::Time::now();
     lleg_goal.trajectory.joint_names = {"leg_left_1_joint", "leg_left_2_joint", "leg_left_3_joint", "leg_left_4_joint", "leg_left_5_joint", "leg_left_6_joint"};
     trajectory_msgs::JointTrajectoryPoint lleg_point;
@@ -424,9 +432,11 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     lleg_goal.trajectory.points[0] = lleg_point;
     lleg_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_leftleg->sendGoal(lleg_goal);
+    //ac_leftleg->waitForResult();
+
     //Right Leg Joint Controller
     control_msgs::FollowJointTrajectoryGoal rleg_goal;
-    rleg_goal.goal_time_tolerance = ros::Duration(2.0 * msg->dt);
+    rleg_goal.goal_time_tolerance = ros::Duration( msg->dt);
     rleg_goal.trajectory.header.stamp = ros::Time::now();
     rleg_goal.trajectory.joint_names = {"leg_right_1_joint", "leg_right_2_joint", "leg_right_3_joint", "leg_right_4_joint", "leg_right_5_joint", "leg_right_6_joint"};
     trajectory_msgs::JointTrajectoryPoint rleg_point;
@@ -441,6 +451,8 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     rleg_goal.trajectory.points[0] = rleg_point;
     rleg_goal.trajectory.points[0].time_from_start = ros::Duration(msg->dt);
     ac_rightleg->sendGoal(rleg_goal);
+    //ac_rightleg->waitForResult();
+
     feedback_.percent_completed = 100;
     as_->publishFeedback(feedback_);
     result_.status = 1;
