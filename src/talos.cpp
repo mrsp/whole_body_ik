@@ -69,7 +69,6 @@ void talos::run()
             //Update Joint_states in Pinocchio
             pin->updateJointConfig(joint_names, joint_positions, joint_velocities);
             joint_inc = false;
-            //cout<<"Joints Received "<<endl;
         }
         rate.sleep();
         ros::spinOnce();
@@ -458,8 +457,6 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
     result_.status = 1;
     as_->setSucceeded(result_);
 }
-
-
 
 
 talos::~talos()
