@@ -53,6 +53,7 @@ using namespace std;
 struct linearTask {
     std::string frame_name;
     int task_type;
+    Eigen::Vector3d vdes;
     Eigen::Vector3d des;
     double weight;
     double gain;
@@ -61,7 +62,8 @@ struct linearTask {
 struct angularTask {
     std::string frame_name;
     int task_type;
-    Eigen::Quaterniond des;
+    Eigen::Vector3d wdes;
+    Eigen::Quaterniond qdes;
     double weight;
     double gain;
 };
@@ -96,15 +98,14 @@ private:
     Eigen::LLT<Eigen::MatrixXd, Eigen::Lower> cholesky;
     Eigen::MatrixXd L_choleksy;
     void clearTasks();
-    void setAngularTask(const std::string &frame_name, int task_type, Eigen::Quaterniond des, double weight, double gain, double dt);
+    void setAngularTask(const std::string &frame_name, int task_type, Eigen::Vector3d wdes, Eigen::Quaterniond des, double weight, double gain, double dt);
     void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask,  double dt);
     void addReguralization();
     void forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel);
     Eigen::Vector3d logMap(Eigen::Quaterniond q);
-    void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d des, double weight, double gain, double dt);
+    void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, Eigen::Vector3d des, double weight, double gain, double dt);
     void setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt);
     bool jointDataReceived;
-
 public:
     Eigen::MatrixXd H;
     Eigen::VectorXd h;
@@ -130,10 +131,8 @@ public:
                              std::vector<double> &qdotvec);
     double getQ(const std::string &jname) const;
     double getQdot(const std::string &jname) const;
-
-    double getQdotd(const std::string &jname) const;
-
     double getQd(const std::string &jname) const;
+    double getQdotd(const std::string &jname) const;
     int getJointId(const std::string &jname) const;
     void printActualJointData() const;
     void printDesiredJointData() const;
@@ -141,7 +140,6 @@ public:
                            const std::vector<double> &qvec,
                            const std::vector<double> &qdotvec,
                            double joint_std = 0);
-
    
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
@@ -169,7 +167,7 @@ public:
 
     Eigen::MatrixXd angularJacobian(const std::string &frame_name);
 
-    Eigen::VectorXd comPosition();
+    Eigen::VectorXd comPosition() ;
 
     Eigen::MatrixXd comJacobian() const;
 
