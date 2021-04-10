@@ -4,6 +4,7 @@
 #include <iostream>
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
+#include <nav_msgs/Odometry.h>
 #include <control_msgs/FollowJointTrajectoryAction.h>
 #include <control_msgs/FollowJointTrajectoryGoal.h>
 #include <actionlib/client/simple_action_client.h>
@@ -30,12 +31,15 @@ private:
     std::vector<double> joint_velocities;
     bool firstJointCb = true;
     bool joint_inc = false;
-    ros::Subscriber joint_state_sub;
+    ros::Subscriber joint_state_sub, odom_sub;
     pin_wrapper *pin;
     whole_body_ik_msgs::HumanoidResult result_;
     whole_body_ik_msgs::HumanoidFeedback feedback_;
     std::string modelname, base_link_frame, lfoot_frame, rfoot_frame, lhand_frame, rhand_frame, head_frame;
     double joint_freq;
+    Eigen::Affine3d Twb;
+    Eigen::Quaterniond qwb;
+    Eigen::Vector3d vwb, omegawb;
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction> *ac_head, *ac_leftleg,*ac_rightleg,*ac_leftarm,*ac_rightarm,*ac_torso;
@@ -44,6 +48,7 @@ public:
     talos(ros::NodeHandle nh_);
     void controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg);
     void joint_stateCb(const sensor_msgs::JointStateConstPtr &msg);
+    void odomCb(const nav_msgs::OdometryConstPtr &msg);
     void run();
     void walking();
 };

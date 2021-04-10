@@ -82,7 +82,7 @@ private:
     pinocchio::Data *data_;
     std::vector<std::string> jnames_;
     Eigen::VectorXd qmin_, qmax_, dqmax_, q_, qdot_, qd, qdotd;
-    bool has_floating_base_;
+    bool has_floating_base;
     qpmad::Solver solver;
     qpmad::SolverParameters solver_params;
     double lm_damping;
@@ -106,6 +106,13 @@ private:
     void setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, Eigen::Vector3d des, double weight, double gain, double dt);
     void setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt);
     bool jointDataReceived;
+
+
+
+    Eigen::Vector3d vwb, omegawb, pwb;
+    Eigen::Matrix3d Rwb;
+    Eigen::Affine3d Twb;
+    Eigen::Quaterniond qwb;
 public:
     Eigen::MatrixXd H;
     Eigen::VectorXd h;
@@ -211,5 +218,28 @@ public:
     Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
 
     Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask,std::vector<dofTask> dtask, double dt);
+
+	/** @fn Matrix3d wedge(Vector3d v)
+	 * 	@brief Computes the skew symmetric matrix of a 3-D vector
+	 *  @param v  3D Twist vector 
+	 *  @return   3x3 skew symmetric representation
+	 */
+	inline Eigen::Matrix3d wedge(Eigen::Vector3d v) 
+    {
+		Eigen::Matrix3d skew;
+		skew = Eigen::Matrix3d::Zero();
+		skew(0, 1) = -v(2);
+		skew(0, 2) = v(1);
+		skew(1, 2) = -v(0);
+		skew(1, 0) = v(2);
+		skew(2, 0) = -v(1);
+		skew(2, 1) = v(0);
+
+		return skew;
+
+	}
+    void setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d omegawb_);
+    void setBaseToWorldTransform(Eigen::Affine3d Twb_);
+
 };
 #endif

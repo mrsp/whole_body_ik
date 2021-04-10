@@ -6,19 +6,23 @@ talos::talos(ros::NodeHandle nh_)
     ros::NodeHandle n_p("~");
     n_p.param<std::string>("modelname", modelname, "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
-    //n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
-    //n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
-    n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
-    n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
+    n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
+    n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");
+    // n_p.param<std::string>("leg_left_6_link", lfoot_frame, "leg_left_6_link");
+    // n_p.param<std::string>("leg_right_6_link", rfoot_frame, "leg_right_6_link");
     n_p.param<std::string>("arm_left_7_link", lhand_frame, "arm_left_7_link");
     n_p.param<std::string>("arm_right_7_link", rhand_frame, "arm_right_7_link");
     n_p.param<std::string>("rgbd_link", head_frame, "head_2_link");
     n_p.param<double>("joint_freq", joint_freq, 1000.0);
 
     //Initialize the Pinocchio Wrapper
-    pin = new pin_wrapper(modelname, false);
+    pin = new pin_wrapper(modelname, true);
+    Twb = Eigen::Affine3d::Identity();
+    vwb = Eigen::Vector3d::Zero();
+    omegawb = Eigen::Vector3d::Zero();
 
     joint_state_sub = nh.subscribe("/joint_states", 10, &talos::joint_stateCb, this);
+    odom_sub = nh.subscribe("/floating_base_pose_simulated", 10, &talos::odomCb, this);
 
     ac_head = new actionlib::SimpleActionClient<control_msgs::FollowJointTrajectoryAction>("/head_controller/follow_joint_trajectory", true);
     ac_head->waitForServer();
@@ -59,6 +63,17 @@ void talos::joint_stateCb(const sensor_msgs::JointStateConstPtr &msg)
     joint_velocities = msg->velocity;
     joint_names = msg->name;
 }
+
+void talos::odomCb(const nav_msgs::OdometryConstPtr &msg)
+{
+    Twb.translation() = Eigen::Vector3d(msg->pose.pose.position.x,msg->pose.pose.position.y,msg->pose.pose.position.z);
+    qwb = Eigen::Quaterniond(msg->pose.pose.orientation.w,msg->pose.pose.orientation.x,msg->pose.pose.orientation.y,msg->pose.pose.orientation.z);
+    Twb.linear() = qwb.toRotationMatrix(); 
+    vwb = Eigen::Vector3d(msg->twist.twist.linear.x,msg->twist.twist.linear.y,msg->twist.twist.linear.z);
+    omegawb = Eigen::Vector3d(msg->twist.twist.angular.x,msg->twist.twist.angular.y,msg->twist.twist.angular.z);
+}
+
+
 void talos::run()
 {
     static ros::Rate rate(joint_freq);
@@ -350,13 +365,17 @@ void talos::controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg)
         }
 
         //Update Joint_states in Pinocchio
+        pin->setBaseToWorldTransform(Twb);
+        pin->setBaseWorldVelocity(vwb, omegawb);
         pin->updateJointConfig(joint_names, joint_positions, joint_velocities);
+
         pin->inverseKinematics(ltaskVec, ataskVec, dtaskVec, msg->dt);
 
         pin->printDesiredJointData();
 
         //Send Desired Joints to Talos
         //Head Joint Controller
+
         control_msgs::FollowJointTrajectoryGoal head_goal;
         head_goal.goal_time_tolerance = ros::Duration(1.25 * msg->dt);
         head_goal.trajectory.header.stamp = ros::Time::now();

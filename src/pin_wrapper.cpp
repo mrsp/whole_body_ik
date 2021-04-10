@@ -19,12 +19,20 @@
 
 using namespace std;
 
-pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating_base, const bool &verbose)
+pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating_base_, const bool &verbose)
 {
-    has_floating_base_ = has_floating_base;
+    has_floating_base = has_floating_base_;
     pmodel_ = new pinocchio::Model();
 
-    pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+
+
+    if (has_floating_base)
+        // TODO: Check the Joint for FreeFlyer, if it is correct
+        pinocchio::urdf::buildModel(model_name, pinocchio::JointModelFreeFlyer(),
+                            *pmodel_, verbose);
+    else
+        pinocchio::urdf::buildModel(model_name, *pmodel_, verbose);
+
     data_ = new pinocchio::Data(*pmodel_);
 
     jnames_.clear();
@@ -41,9 +49,10 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
         }
     }
 
-    qmin_.resize(jnames_.size());
-    qmax_.resize(jnames_.size());
-    dqmax_.resize(jnames_.size());
+
+    qmin_.resize(pmodel_->nq);
+    qmax_.resize(pmodel_->nq);
+    dqmax_.resize(pmodel_->nv);
     qmin_ = pmodel_->lowerPositionLimit;
     qmax_ = pmodel_->upperPositionLimit;
     dqmax_ = pmodel_->velocityLimit;
@@ -53,25 +62,25 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     for (int i = 0; i < qmin_.size(); ++i)
     {
         double d = qmax_[i] - qmin_[i];
-        // If wrong values or if difference less than 0.05 deg (0.001 rad)
+        //If wrong values or if difference less than 0.05 deg (0.001 rad)
         if ((d < 0) || (fabs(d) < 0.001))
         {
             qmin_[i] = -50.0;
             qmax_[i] = 50.0;
             dqmax_[i] = 200.0;
         }
+        std::cout << qmin_[i] << "\t" << qmax_[i] << "\t"<< dqmax_[i] << std::endl;
     }
 
     I.setIdentity(pmodel_->nv, pmodel_->nv);
     H.setZero(pmodel_->nv, pmodel_->nv);
     h.setZero(pmodel_->nv);
+    qd.setZero(pmodel_->nq);
+    q_.setZero(pmodel_->nq);
     qdotd.setZero(pmodel_->nv);
-    qd.setZero(pmodel_->nv);
-    q_.setZero(pmodel_->nv);
     qdot_.setZero(pmodel_->nv);
     jointDataReceived = false;
 
-    iters = 1000;
     lm_damping = 1e-6;
     gainC = 0.5;
     //Not used in QP
@@ -96,6 +105,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     std::cout << "Joint Names " << std::endl;
     printJointNames();
     std::cout << "with " << ndofActuated() << " actuated joints" << std::endl;
+    printJointLimits();
     std::cout << "Model loaded: " << model_name << std::endl;
 }
 
@@ -105,18 +115,34 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
                                     double joint_std)
 {
     jointDataReceived = true;
-
     mapJointNamesIDs(jnames, qvec, qdotvec);
+
+    if (has_floating_base)
+    {
+
+        //position
+        q_[0] = pwb(0);
+        q_[1] = pwb(1);
+        q_[2] = pwb(2);
+        q_[3] = qwb.x(); //x
+        q_[4] = qwb.y(); //y
+        q_[5] = qwb.z(); //z
+        q_[6] = qwb.w(); //w
+
+        //Velocity
+        qdot_[0] = vwb(0);
+        qdot_[1] = vwb(1);
+        qdot_[2] = vwb(2);
+        qdot_[3] = omegawb(0); //x
+        qdot_[4] = omegawb(1); //y
+        qdot_[5] = omegawb(2); //z
+    }
+
     pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-
+    
 }
 
-void pin_wrapper::forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel)
-{
-    pinocchio::framesForwardKinematics(*pmodel_, *data_, pin_joint_pos);
-    pinocchio::computeJointJacobians(*pmodel_, *data_, pin_joint_pos);
-}
 
 void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
                                    const std::vector<double> &qvec,
@@ -124,7 +150,7 @@ void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
 {
     assert(qvec.size() == jnames.size() && qdotvec.size() == jnames.size());
 
-    q_.setZero(pmodel_->nv);
+    q_.setZero(pmodel_->nq);
     qdot_.setZero(pmodel_->nv);
 
 
@@ -143,7 +169,7 @@ void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
         }
         else
         {
-            q_[vidx] = qvec[i];
+            q_[qidx] = qvec[i];
             qdot_[vidx] = qdotvec[i];
         }
     }
@@ -162,8 +188,9 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames_,
     {
         int jidx = pmodel_->getJointId(jnames_[i]);
         int vidx = pmodel_->idx_vs[jidx];
+        int qidx = pmodel_->idx_qs[jidx];
 
-        qvec[i] = q_[vidx];
+        qvec[i] = q_[qidx];
         qdotvec[i] = qdot_[vidx];
     }
 }
@@ -181,9 +208,9 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames_,
     {
         int jidx = pmodel_->getJointId(jnames_[i]);
         int vidx = pmodel_->idx_vs[jidx];
-
+        int qidx = pmodel_->idx_qs[jidx];
         qdotvec[i] = qdotd(vidx);
-        qvec[i] = qd(vidx);
+        qvec[i] = qd(qidx);
     }
 }
 
@@ -192,7 +219,6 @@ double pin_wrapper::getQdotd(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
     int vidx = pmodel_->idx_vs[jidx];
-
     return qdotd(vidx);
 }
 
@@ -200,9 +226,8 @@ double pin_wrapper::getQdotd(const std::string &jname) const
 double pin_wrapper::getQd(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
-    int vidx = pmodel_->idx_vs[jidx];
-
-    return qd(vidx);
+    int qidx = pmodel_->idx_qs[jidx];
+    return qd(qidx);
 }
 
 
@@ -210,7 +235,6 @@ double pin_wrapper::getQdot(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
     int vidx = pmodel_->idx_vs[jidx];
-
     return qdot_(vidx);
 }
 
@@ -218,9 +242,8 @@ double pin_wrapper::getQdot(const std::string &jname) const
 double pin_wrapper::getQ(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
-    int vidx = pmodel_->idx_vs[jidx];
-
-    return q_(vidx);
+    int qidx = pmodel_->idx_qs[jidx];
+    return q_(qidx);
 }
 
 
@@ -228,81 +251,113 @@ int pin_wrapper::getJointId(const std::string &jname) const
 {
     int jidx = pmodel_->getJointId(jname);
     int vidx = pmodel_->idx_vs[jidx];
-
     return vidx;
 }
 
 Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)
 {
-    try
+
+    pinocchio::Data::Matrix6x J(6, pmodel_->nv);
+    J.fill(0);
+    if(has_floating_base)
     {
-        pinocchio::Data::Matrix6x J(6, pmodel_->nv);
-        J.fill(0);
-        // Jacobian in pinocchio::LOCAL (link) frame
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-        // Transform Jacobians from pinocchio::LOCAL frame to base frame
-        J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
-        J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
-        return J;
+        try
+        {
+            // Jacobian in pinocchio::WORLD (link) frame
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::WORLD, J);
+            return J;
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(6, ndofActuated());
+        }
     }
-    catch (std::exception &e)
+    else
     {
-        std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
-                  << "Returning zeros" << std::endl;
-        return Eigen::MatrixXd::Zero(6, ndofActuated());
+        try
+        {
+            // Jacobian in pinocchio::LOCAL (link) frame
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+            // Transform Jacobians from pinocchio::LOCAL frame to base frame
+            J.topRows(3) = (data_->oMf[link_number].rotation()) * J.topRows(3);
+            J.bottomRows(3) = (data_->oMf[link_number].rotation()) * J.bottomRows(3);
+            return J;
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(6, ndofActuated());
+        }
     }
 }
 
 Eigen::Vector3d pin_wrapper::linkPosition(const std::string &frame_name)
 {
-    try
-    {
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
 
-        return data_->oMf[link_number].translation();
-    }
-    catch (std::exception &e)
-    {
-        std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
-                  << "Returning zeros" << std::endl;
-        return Eigen::Vector3d::Zero();
-    }
+
+        try
+        {
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            return data_->oMf[link_number].translation();
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::Vector3d::Zero();
+        }
+   
 }
 
 Eigen::Quaterniond pin_wrapper::linkOrientation(const std::string &frame_name)
 {
-    try
-    {
-        pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-        Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[link_number].rotation());
-        Eigen::Quaterniond tempQ;
-        tempQ.w() = temp(0);
-        tempQ.x() = temp(1);
-        tempQ.y() = temp(2);
-        tempQ.z() = temp(3);
-        return tempQ;
-    }
-    catch (std::exception &e)
-    {
-        std::cerr << "WARNING: Frame name " << frame_name << " is invalid! ... "
-                  << "Returning zeros" << std::endl;    // Eigen::Quaterniond actual = linkOrientation(frame_name);
-    // Eigen::Vector3d actualV = Eigen::Vector3d(actual.x(),actual.y(),actual.z());
-    // Eigen::Vector3d desV =  Eigen::Vector3d(des.x(),des.y(),des.z());
-    // v = (des.w()*actualV - actual.w()*desV + desV.cross(actualV)) / dt; 
-    //cout<<"Error "<<v<<endl;
-        return Eigen::Quaterniond::Identity();
-    }
+
+
+  
+        try
+        {
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            Eigen::Vector4d temp = rotationToQuaternion(data_->oMf[link_number].rotation());
+            Eigen::Quaterniond tempQ;
+            tempQ.w() = temp(0);
+            tempQ.x() = temp(1);
+            tempQ.y() = temp(2);
+            tempQ.z() = temp(3);
+            return tempQ;
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Frame name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;    
+            return Eigen::Quaterniond::Identity();
+        }
+   
+
 }
 
 Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
 {
     Eigen::VectorXd lpose(7);
-    pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-
-    lpose.head(3) = data_->oMf[link_number].translation();
-    lpose.tail(4) = rotationToQuaternion(data_->oMf[link_number].rotation());
-
+    lpose.setZero();
+  
+        try
+        {
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            lpose.head(3) = data_->oMf[link_number].translation();
+            lpose.tail(4) = rotationToQuaternion(data_->oMf[link_number].rotation());
+        }
+        catch(const std::exception& e)
+        {
+             std::cerr << "WARNING: Frame name " << frame_name << " is invalid! ... "<< "Returning zeros" << std::endl;    
+        }
+        
+       
+    
     return lpose;
 }
 
@@ -329,41 +384,83 @@ Eigen::Vector3d pin_wrapper::logMap(Eigen::Quaterniond quat)
 
 Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
 {
-    pinocchio::Data::Matrix6x J(6, pmodel_->nv);
-    J.fill(0);
-    pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
 
-    pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-    try
+
+    pinocchio::Data::Matrix6x J(6,  ndofActuated());
+    J.fill(0);
+
+    if(has_floating_base)
     {
-        // Transform Jacobian from pinocchio::LOCAL frame to base frame
-        return (data_->oMf[link_number].rotation()) * J.topRows(3);
+        try
+        {
+            // Jacobian in pinocchio::WORLD frame
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::WORLD, J);
+            return  J.topRows(3);
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(3, ndofActuated());
+        }
     }
-    catch (std::exception &e)
+    else
     {
-        std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
-                  << "Returning zeros" << std::endl;
-        return Eigen::MatrixXd::Zero(3, ndofActuated());
+        try
+        {
+            // Jacobian in pinocchio::LOCAL frame
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+            // Transform Jacobian from pinocchio::LOCAL frame to base frame
+            return (data_->oMf[link_number].rotation()) * J.topRows(3);
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(3, ndofActuated());
+        }
     }
+   
 }
 
 Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
 {
     pinocchio::Data::Matrix6x J(6, pmodel_->nv);
     J.fill(0);
-    pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-    try
+    if(has_floating_base)
     {
-        // Jacobian in pinocchio::LOCAL frame
-        pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
-        // Transform Jacobian from pinocchio::LOCAL frame to base frame
-        return (data_->oMf[link_number].rotation()) * J.bottomRows(3);
+        try
+        {
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            // Jacobian in pinocchio::WORLD frame
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::WORLD, J);
+            return  J.bottomRows(3);
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(3, ndofActuated());
+        }
     }
-    catch (std::exception &e)
+    else
     {
-        std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
-                  << "Returning zeros" << std::endl;
-        return Eigen::MatrixXd::Zero(3, ndofActuated());
+        try
+        {
+            pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
+            // Jacobian in pinocchio::LOCAL frame
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+            // Transform Jacobian from pinocchio::LOCAL frame to base frame
+            return (data_->oMf[link_number].rotation()) * J.bottomRows(3);
+        }
+        catch (std::exception &e)
+        {
+            std::cerr << "WARNING: Link name " << frame_name << " is invalid! ... "
+                    << "Returning zeros" << std::endl;
+            return Eigen::MatrixXd::Zero(3, ndofActuated());
+        }
     }
 }
 
@@ -379,7 +476,6 @@ Eigen::MatrixXd pin_wrapper::comJacobian() const
 {
     Eigen::MatrixXd Jcom;
     Jcom.setZero(3, pmodel_->nv);
-
     pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
     Jcom = data_->Jcom;
     return Jcom;
@@ -410,7 +506,7 @@ void pin_wrapper::printDesiredJointData() const
               << "D. Joint Velocity" << std::endl;
 
     for (int i = 0; i < jnames_.size(); ++i)
-        std::cout << jnames_[i] << "\t\t\t" << qd(i) << "\t\t\t\t" << qdotd(i) << std::endl;
+        std::cout << jnames_[i] << "\t\t\t" << getQd(jnames_[i]) << "\t\t\t\t" << getQdotd(jnames_[i]) << std::endl;
 }
 
 void pin_wrapper::printActualJointData() const
@@ -422,7 +518,7 @@ void pin_wrapper::printActualJointData() const
               << "A. Joint Velocity" << std::endl;
 
     for (int i = 0; i < jnames_.size(); ++i)
-        std::cout << jnames_[i] << "\t\t\t" << q_(i) << "\t\t\t\t" << qdot_(i) << std::endl;
+        std::cout << jnames_[i] << "\t\t\t" << getQ(jnames_[i]) << "\t\t\t\t" << getQdot(jnames_[i]) << std::endl;
 }
 
 
@@ -479,7 +575,7 @@ void pin_wrapper::clearTasks()
     H.setZero(pmodel_->nv, pmodel_->nv);
     h.setZero(pmodel_->nv);
 }
-void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, Eigen::Vector3d des, double weight, double gain, double dt)
+void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Eigen::Vector3d vdes, Eigen::Vector3d pdes, double weight, double gain, double dt)
 {
 
 
@@ -490,34 +586,38 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     }
 
     Eigen::MatrixXd Jac;
-    Eigen::Vector3d e, vdes_;
+    Eigen::Vector3d e, pmeas, vmeas;
     Jac.resize(3, pmodel_->nv);
 
     if (task_type == 0)
     {
         Jac = linearJacobian(frame_name);
-        // cout<<"Frame \n"<<frame_name<<endl;
-        // cout<<"des \n"<<des<<endl;
-        // cout<<"actual \n"<<linkPosition(frame_name)<<endl;
-
-        e = (des - linkPosition(frame_name));
+        pmeas = linkPosition(frame_name);
     }
     else if (task_type == 2)
     {
         Jac = comJacobian();
-        // cout<<"Frame \n"<<"CoM"<<endl;
-        // cout<<"des \n"<<des<<endl;
-        // cout<<"actual \n"<<comPosition()<<endl;
-        e = (des - comPosition());
+        pmeas = comPosition();
     }
-    vdes_ = vdes + gain*e;
-    cost += (Jac * qdotd - vdes_).squaredNorm()* weight;
+    e = (pdes - pmeas);
+    vdes +=  gain*e;
+
+    //Measured Link's Linear Velocity in the world frame;
+    vmeas =  Jac * qdot_;
+        cout<<"Frame \n"<<frame_name<<endl;
+        cout<<"des \n"<<pdes<<endl;
+        cout<<"actual \n"<<pmeas<<endl;
+        cout<<"vdes \n"<<vdes<<endl;
+        cout<<"vactual \n"<<vmeas<<endl;
+
+
+    cost += (vmeas - vdes).squaredNorm()* weight;
     H += weight * Jac.transpose() * Jac + lm_damping*fmax(lm_damping, e.norm()) * I; //fmax(lm_damping, v.norm())
-    h -= (weight*vdes_.transpose() * Jac).transpose();
+    h -= (weight*vdes.transpose() * Jac).transpose();
 }
 
 
-void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type,Eigen::Vector3d wdes, Eigen::Quaterniond des, double weight, double gain, double dt)
+void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type,Eigen::Vector3d wdes, Eigen::Quaterniond qdes, double weight, double gain, double dt)
 {
 
     if (task_type > 3 || task_type < 0)
@@ -527,20 +627,29 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type,Ei
     }
 
     Eigen::MatrixXd Jac;
-    Eigen::Vector3d e, wdes_;
+    Eigen::Vector3d e, wmeas, v_d, v_;
     Jac.resize(3, pmodel_->nv);
 
+    //Jacobian in World Frame
     Jac = angularJacobian(frame_name);
-    e = logMap(des * (linkOrientation(frame_name)).inverse());
-    // Eigen::Quaterniond actual = linkOrientation(frame_name);
-    // Eigen::Vector3d actualV = Eigen::Vector3d(actual.x(),actual.y(),actual.z());
-    // Eigen::Vector3d desV =  Eigen::Vector3d(des.x(),des.y(),des.z());
-    // v = (des.w()*actualV - actual.w()*desV + desV.cross(actualV)) / dt; 
-    //cout<<"Error "<<v<<endl;
-    wdes_ = wdes + gain * e;
-    cost += (Jac * qdotd - wdes_).squaredNorm()* weight;
+    
+    //Orientation in World Frame
+    Eigen::Quaterniond qmeas = linkOrientation(frame_name);
+        cout<<"Frame \n"<<frame_name<<endl;
+        cout<<"des \n"<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
+        cout<<"actual \n"<< qmeas.x()<< qmeas.y() << qmeas.z() <<qmeas.w() << endl;
+    
+    //Error in World Frame
+    wdes +=  gain * e;
+    //e = logMap(qdes * qmeas.inverse());
+    v_d = Eigen::Vector3d(qdes.x(),qdes.y(),qdes.z());
+    v_ = Eigen::Vector3d(qmeas.x(),qmeas.y(),qmeas.z());
+    e = - (qdes.w() * v_  - qmeas.w() * v_d + wedge(v_d)*v_ );
+    wmeas =  Jac * qdot_;
+    
+    cost += (wdes - wmeas).squaredNorm()* weight;
     H += weight * Jac.transpose() * Jac + lm_damping*fmax(lm_damping, e.norm()) * I; //fmax(lm_damping, v.norm())
-    h -= (weight*wdes_.transpose() * Jac).transpose();
+    h -= (weight*wdes.transpose() * Jac).transpose();
 }
 void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt)
 {
@@ -554,7 +663,6 @@ void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, doubl
     Eigen::MatrixXd Jac;
     double v, qqdes, qq, qqdot;
     Jac.resize(1, pmodel_->nv);
-
     Jac.setZero();
   
 
@@ -568,7 +676,7 @@ void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, doubl
     qqdot = getQdotd(joint_name);
     double cost__ = ( qqdot - gain * v)*( qqdot - gain * v) * weight;
     cost += cost__;
-    // std::cout<<"Joint "<<joint_name<<"Id "<<idx<<" Data "<<qq<<" "<<qqdot<<" Des "<<qqdes<<" Cost "<<cost__<<std::endl;
+    std::cout<<"Joint "<<joint_name<<"Id "<<idx<<" Data "<<qq<<" "<<qqdot<<" Des "<<qqdes<<" Cost "<<cost__<<std::endl;
     // std::cout<<"weight  "<<Jac<<"gain "<<v<<std::endl;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, v*v) * (Jac.transpose() * Jac);
     h -= (weight * gain * v * Jac).transpose();
@@ -601,6 +709,21 @@ void pin_wrapper::addReguralization()
 {
     H+= I*2.2e-4;
 }
+
+
+void pin_wrapper::setBaseToWorldTransform(Eigen::Affine3d Twb_)
+{
+    pwb = Twb_.translation();
+    Rwb = Twb_.linear();
+    qwb = Eigen::Quaterniond(Rwb);
+    Twb = Twb_;
+}
+void pin_wrapper::setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d omegawb_)
+{
+    vwb = vwb_;
+    omegawb = omegawb_;
+}
+
 Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask,  std::vector<dofTask> dtask, double dt)
 {
     
@@ -612,10 +735,10 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     }
     jointDataReceived = false;
 
-
+    
         clearTasks();
         addTasks(ltask, atask, dtask, dt);
-        addReguralization();
+        //addReguralization();
         lbq = gainC * (jointMinAngularLimits() - q_) / dt;
         ubq = gainC * (jointMaxAngularLimits() - q_) / dt;
         for (unsigned int i = 0; i < pmodel_->nv; ++i)
@@ -637,12 +760,11 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
    
         qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
         qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
-        //qd = qd + qdotd*dt;
-        //cout<<"Iter "<<j<<"cost "<<fabs((cost - cost_))<<endl;
-        cout<<"qd "<<qd<<" qdot "<<qdotd<<endl;
+        std::cout<<"Optmization ---"<<std::endl;
+        for (int i = 0; i < qd.size(); ++i)
+            std::cout << qd[i] << "\t\t" << qdotd[i] << std::endl;
+        std::cout<<"---------------"<<std::endl;
 
-  
-   
 
 
     return qdotd;
