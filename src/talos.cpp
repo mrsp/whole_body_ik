@@ -46,7 +46,7 @@ talos::talos(ros::NodeHandle nh_)
     as_->start();
     std::cout << "Talos Whole Body Control Server Online" << std::endl;
     ros::Duration(0.5).sleep();
-    //walking();
+    walking();
 }
 void talos::joint_stateCb(const sensor_msgs::JointStateConstPtr &msg)
 {

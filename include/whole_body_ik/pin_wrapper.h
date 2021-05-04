@@ -90,6 +90,7 @@ private:
     double cost, cost_;
     Eigen::MatrixXd I;
     int iters;
+    bool initialized;
     Eigen::MatrixXd A;
     Eigen::VectorXd Alb;
     Eigen::VectorXd Aub;
@@ -136,6 +137,10 @@ public:
     void getDesiredJointData(const std::vector<std::string> &jnames_,
                              std::vector<double> &qvec,
                              std::vector<double> &qdotvec);
+
+    void getDesiredJointData(Eigen::VectorXd &qvec,
+                                      Eigen::VectorXd &qdotvec);
+                             
     double getQ(const std::string &jname) const;
     double getQdot(const std::string &jname) const;
     double getQd(const std::string &jname) const;
@@ -148,6 +153,7 @@ public:
                            const std::vector<double> &qdotvec,
                            double joint_std = 0);
    
+    void updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq);
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
                           const std::vector<double> &qdotvec);
