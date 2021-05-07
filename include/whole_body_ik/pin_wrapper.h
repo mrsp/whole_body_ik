@@ -50,7 +50,8 @@
 #include <whole_body_ik/LeakyIntegrator.h>
 using namespace std;
 
-struct linearTask {
+struct linearTask
+{
     std::string frame_name;
     int task_type;
     Eigen::Vector3d vdes;
@@ -59,7 +60,8 @@ struct linearTask {
     double gain;
 };
 
-struct angularTask {
+struct angularTask
+{
     std::string frame_name;
     int task_type;
     Eigen::Vector3d wdes;
@@ -67,7 +69,8 @@ struct angularTask {
     double weight;
     double gain;
 };
-struct dofTask {
+struct dofTask
+{
     std::string joint_name;
     int task_type;
     double des;
@@ -100,7 +103,7 @@ private:
     Eigen::MatrixXd L_choleksy;
     void clearTasks();
     void setAngularTask(const std::string &frame_name, int task_type, Eigen::Vector3d wdes, Eigen::Quaterniond des, double weight, double gain, double dt);
-    void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask,  double dt);
+    void addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask, double dt);
     void addReguralization();
     void forwardKinematics(Eigen::VectorXd pin_joint_pos, Eigen::VectorXd pin_joint_vel);
     Eigen::Vector3d logMap(Eigen::Quaterniond q);
@@ -108,12 +111,11 @@ private:
     void setDOFTask(const std::string &joint_name, int task_type, double des, double weight, double gain, double dt);
     bool jointDataReceived;
 
-
-
     Eigen::Vector3d vwb, omegawb, pwb;
     Eigen::Matrix3d Rwb;
     Eigen::Affine3d Twb;
     Eigen::Quaterniond qwb;
+
 public:
     Eigen::MatrixXd H;
     Eigen::VectorXd h;
@@ -128,7 +130,7 @@ public:
 
     inline int ndofActuated() const
     {
-            return pmodel_->nv;
+        return pmodel_->nv;
     }
 
     void getJointData(const std::vector<std::string> &jnames_,
@@ -139,8 +141,8 @@ public:
                              std::vector<double> &qdotvec);
 
     void getDesiredJointData(Eigen::VectorXd &qvec,
-                                      Eigen::VectorXd &qdotvec);
-                             
+                             Eigen::VectorXd &qdotvec);
+
     double getQ(const std::string &jname) const;
     double getQdot(const std::string &jname) const;
     double getQd(const std::string &jname) const;
@@ -152,7 +154,7 @@ public:
                            const std::vector<double> &qvec,
                            const std::vector<double> &qdotvec,
                            double joint_std = 0);
-   
+
     void updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq);
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
@@ -162,13 +164,14 @@ public:
 
     inline Eigen::Vector3d getLinearVelocity(const std::string &frame_name)
     {
-        return (linearJacobian(frame_name) * qdotd);
+        return (linearJacobian(frame_name) * qdot_);
     }
 
     inline Eigen::Vector3d getAngularVelocity(const std::string &frame_name)
     {
-        return (angularJacobian(frame_name) * qdotd);
+        return (angularJacobian(frame_name) * qdot_);
     }
+    Eigen::VectorXd comVelocity();
 
     Eigen::Vector3d linkPosition(const std::string &frame_name);
 
@@ -180,7 +183,7 @@ public:
 
     Eigen::MatrixXd angularJacobian(const std::string &frame_name);
 
-    Eigen::VectorXd comPosition() ;
+    Eigen::VectorXd comPosition();
 
     Eigen::MatrixXd comJacobian() const;
 
@@ -223,29 +226,27 @@ public:
 
     Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
 
-    Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask,std::vector<dofTask> dtask, double dt);
+    Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask, double dt);
 
-	/** @fn Matrix3d wedge(Vector3d v)
+    /** @fn Matrix3d wedge(Vector3d v)
 	 * 	@brief Computes the skew symmetric matrix of a 3-D vector
 	 *  @param v  3D Twist vector 
 	 *  @return   3x3 skew symmetric representation
 	 */
-	inline Eigen::Matrix3d wedge(Eigen::Vector3d v) 
+    inline Eigen::Matrix3d wedge(Eigen::Vector3d v)
     {
-		Eigen::Matrix3d skew;
-		skew = Eigen::Matrix3d::Zero();
-		skew(0, 1) = -v(2);
-		skew(0, 2) = v(1);
-		skew(1, 2) = -v(0);
-		skew(1, 0) = v(2);
-		skew(2, 0) = -v(1);
-		skew(2, 1) = v(0);
+        Eigen::Matrix3d skew;
+        skew = Eigen::Matrix3d::Zero();
+        skew(0, 1) = -v(2);
+        skew(0, 2) = v(1);
+        skew(1, 2) = -v(0);
+        skew(1, 0) = v(2);
+        skew(2, 0) = -v(1);
+        skew(2, 1) = v(0);
 
-		return skew;
-
-	}
+        return skew;
+    }
     void setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d omegawb_);
     void setBaseToWorldTransform(Eigen::Affine3d Twb_);
-
 };
 #endif

@@ -153,10 +153,7 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
     q_.setZero(pmodel_->nq);
     qdot_.setZero(pmodel_->nv);
     q_ = q;
-    q_[3] = q[4];
-    q_[4] = q[5];
-    q_[5] = q[6];
-    q_[6] = q[3];
+
     //cout<<"Joint Data Pre"<<q.transpose()<<endl;
 
     //cout<<"Joint Data After"<<q_.transpose()<<endl;
@@ -166,13 +163,11 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
     pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 
-
     // std::cout<<" LLeg "<<linkPosition("l_foot").transpose()<<std::endl;
     // std::cout<<" RLeg "<<linkPosition("r_foot").transpose()<<std::endl;
     // std::cout<<" Base "<<linkPosition("pelvis").transpose()<<std::endl;
     // Eigen::Quaterniond qdes = linkOrientation("pelvis");
     // std::cout<<" Base "<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
-
 }
 
 void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
@@ -386,30 +381,30 @@ Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
     return lpose;
 }
 
-	/** @brief Computes the logarithmic map for a component in SO(3) group
+/** @brief Computes the logarithmic map for a component in SO(3) group
 	 *  @param q Quaternion in SO(3) group
 	 *  @return   3D twist in so(3) algebra
 	 */
-	 Eigen::Vector3d pin_wrapper::logMap(
-			Eigen::Quaterniond q) {
+Eigen::Vector3d pin_wrapper::logMap(
+    Eigen::Quaterniond q)
+{
 
-		Eigen::Vector3d omega;
-		omega = Eigen::Vector3d::Zero();
+    Eigen::Vector3d omega;
+    omega = Eigen::Vector3d::Zero();
 
-		double temp = q.norm();
+    double temp = q.norm();
 
-		Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
+    Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
 
-		double temp_ = tempV.norm();
-		if (temp_ > std::numeric_limits<double>::epsilon()) 
-		{
-			tempV *= (1.000 / temp_);
-			omega = tempV * (2.0 * acos(q.w() / temp));
-		}
+    double temp_ = tempV.norm();
+    if (temp_ > std::numeric_limits<double>::epsilon())
+    {
+        tempV *= (1.000 / temp_);
+        omega = tempV * (2.0 * acos(q.w() / temp));
+    }
 
-
-		return omega;
-	}
+    return omega;
+}
 Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
 {
 
@@ -505,6 +500,11 @@ Eigen::MatrixXd pin_wrapper::comJacobian() const
     pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
     Jcom = data_->Jcom;
     return Jcom;
+}
+
+Eigen::VectorXd pin_wrapper::comVelocity()
+{
+    return (comJacobian() * qdot_);
 }
 
 void pin_wrapper::printJointLimits() const
@@ -624,16 +624,16 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         pmeas = comPosition();
     }
     e = (pdes - pmeas);
-    vdes = gain * e/dt;
+    vdes += gain * e / dt;
 
     //Measured Link's Linear Velocity in the world frame;
- 
-        vmeas = Jac * qdot_;
-        // cout<<"Frame \n"<<frame_name<<endl;
-        // cout<<"des \n"<<pdes.transpose()<<endl;
-        // cout<<"actual \n"<<pmeas.transpose()<<endl;
-        // cout<<"JACOBIAN \n"<<Jac<<endl;
-  
+
+    vmeas = Jac * qdot_;
+    // cout<<"Frame \n"<<frame_name<<endl;
+    // cout<<"des \n"<<pdes.transpose()<<endl;
+    // cout<<"actual \n"<<pmeas.transpose()<<endl;
+    // cout<<"JACOBIAN \n"<<Jac<<endl;
+
     cost += (vmeas - vdes).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, e.norm()) * I; //fmax(lm_damping, v.norm())
     h -= (weight * vdes.transpose() * Jac).transpose();
@@ -658,7 +658,6 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //Orientation in World Frame
     Eigen::Quaterniond qmeas = linkOrientation(frame_name);
 
-
     e = logMap(qdes * qmeas.inverse());
     // v_d = Eigen::Vector3d(qdes.x(), qdes.y(), qdes.z());
     // v_ = Eigen::Vector3d(qmeas.x(), qmeas.y(), qmeas.z());
@@ -668,7 +667,7 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     // cout<<"actual \n"<< qmeas.x()<< qmeas.y() << qmeas.z() <<qmeas.w() << endl;
     // cout<<"error \n" <<e.transpose()<<endl;
     //Error in World Frame
-    wdes = gain * e/dt;
+    wdes += gain * e / dt;
     wmeas = Jac * qdot_;
 
     cost += (wdes - wmeas).squaredNorm() * weight;
@@ -754,71 +753,48 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         return qdot_;
     }
 
-  
     jointDataReceived = false;
 
-    if(!initialized)
+    if (!initialized)
         qd = q_;
 
-
     int iter = 0;
-    int ii=0;
-    if(has_floating_base)
-       ii = 6;
+    int ii = 0;
+    if (has_floating_base)
+        ii = 6;
 
-    // while (iter < 1000)
-    // {
-        clearTasks();
-        addTasks(ltask, atask, dtask, dt);
-        //addReguralization();
-        lbq = gainC * (jointMinAngularLimits() - q_) / dt;
-        ubq = gainC * (jointMaxAngularLimits() - q_) / dt;
+    clearTasks();
+    addTasks(ltask, atask, dtask, dt);
+    lbq = gainC * (jointMinAngularLimits() - q_) / dt;
+    ubq = gainC * (jointMaxAngularLimits() - q_) / dt;
 
+    for (unsigned int i = ii; i < pmodel_->nv; ++i)
+    {
+        lb(i) = lbq(i+1) > lbdq(i) ? lbq(i) : lbdq(i);
+        ub(i) = ubq(i+1) < ubdq(i) ? ubq(i+1) : ubdq(i);
+    }
 
-        for (unsigned int i = ii; i < pmodel_->nv; ++i)
-        {
-            lb(i) = lbq(i) > lbdq(i) ? lbq(i) : lbdq(i);
-            ub(i) = ubq(i) < ubdq(i) ? ubq(i) : ubdq(i);
-        }
-     
-        // cout<<"H "<<H<<endl;
-        // cout<<"h "<<h<<endl;
-        //qdotd = H.colPivHouseholderQr().solve(-h);
-        //qdotd = H.inverse()*h;
-        // std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
-        //cholesky.compute(H);
-        //qdotd_ = cholesky.solve(-h);
-        //std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
-        //std::cout << "-----" << std::endl;
-        //L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
-        //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
+    // cout<<"H "<<H<<endl;
+    // cout<<"h "<<h<<endl;
+    //qdotd = H.colPivHouseholderQr().solve(-h);
+    //qdotd = H.inverse()*h;
+    // std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
+    //cholesky.compute(H);
+    //qdotd_ = cholesky.solve(-h);
+    //std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
+    //std::cout << "-----" << std::endl;
+    //L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
+    //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
 
-        qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
+    qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
 
-        qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
+    qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
 
-
-        // for (int i = 0; i < qd.size(); ++i)
-        //     std::cout << qd[i] << std::endl;
-        // std::cout<<"Optmization Velocity  ---"<<std::endl;
-        // for (int i = 0; i < qdotd.size(); ++i)
-        //     std::cout << qdotd[i] << std::endl;
-
-    //     double impr = fabs(cost - cost_) / cost_;
-    //     std::cout << "Cost " << cost << " Improv " << impr << std::endl;
-
-    //     if (impr < 1.0e-5 || fabs(cost) < 1.0e-6)
-    //     {
-    //         break;
-    //     }
-
-    //     pinocchio::framesForwardKinematics(*pmodel_, *data_, qd);
-    //     pinocchio::computeJointJacobians(*pmodel_, *data_, qd);
-    //     q_ = qd;
-    //     qdot_ = qdotd;
-    //     iter++;
-    // }
-    //std::cout << "---------------" << std::endl;
+    // for (int i = 0; i < qd.size(); ++i)
+    //     std::cout << qd[i] << std::endl;
+    // std::cout<<"Optmization Velocity  ---"<<std::endl;
+    // for (int i = 0; i < qdotd.size(); ++i)
+    //     std::cout << qdotd[i] << std::endl;
 
     return qdotd;
 }
