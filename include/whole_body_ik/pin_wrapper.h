@@ -143,11 +143,14 @@ public:
     void getDesiredJointData(Eigen::VectorXd &qvec,
                              Eigen::VectorXd &qdotvec);
 
+    void getDesiredJointData(const std::vector<std::string> &jnames_,
+                                      Eigen::VectorXd &qvec,
+                                      Eigen::VectorXd &qdotvec);
+
     double getQ(const std::string &jname) const;
     double getQdot(const std::string &jname) const;
     double getQd(const std::string &jname) const;
     double getQdotd(const std::string &jname) const;
-    int getJointId(const std::string &jname) const;
     void printActualJointData() const;
     void printDesiredJointData() const;
     void updateJointConfig(const std::vector<std::string> &jnames_,
@@ -246,6 +249,7 @@ public:
 
         return skew;
     }
+    void setBaseToWorldState(Eigen::Vector3d pwb_, Eigen::Quaterniond qwb_);
     void setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d omegawb_);
     void setBaseToWorldTransform(Eigen::Affine3d Twb_);
 };
