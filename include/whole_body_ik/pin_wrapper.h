@@ -133,9 +133,9 @@ public:
         return pmodel_->nv;
     }
 
-    void getJointData(const std::vector<std::string> &jnames_,
-                      std::vector<double> &qvec,
-                      std::vector<double> &qdotvec);
+    void getJointData(const std::vector<std::string> &jnames,
+                               Eigen::VectorXd &qvec,
+                               Eigen::VectorXd &qdotvec);
     void getDesiredJointData(const std::vector<std::string> &jnames_,
                              std::vector<double> &qvec,
                              std::vector<double> &qdotvec);
@@ -146,7 +146,8 @@ public:
     void getDesiredJointData(const std::vector<std::string> &jnames_,
                                       Eigen::VectorXd &qvec,
                                       Eigen::VectorXd &qdotvec);
-
+    std::vector<std::string> getJointNames();
+    
     double getQ(const std::string &jname) const;
     double getQdot(const std::string &jname) const;
     double getQd(const std::string &jname) const;
@@ -162,6 +163,9 @@ public:
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
                           const std::vector<double> &qdotvec);
+    Eigen::VectorXd getGeneralizedCoordinates();
+
+    Eigen::VectorXd getGeneralizedVelocities();
 
     Eigen::MatrixXd geometricJacobian(const std::string &frame_name);
 
@@ -225,9 +229,65 @@ public:
             return -1.0;
     }
 
-    Eigen::Vector4d rotationToQuaternion(const Eigen::Matrix3d &R);
+    inline Eigen::Vector3d logMap(const Eigen::Matrix3d &R_)
+    {
+        Eigen::Vector3d w;
+        double acosV = (R_(0, 0) + R_(1, 1) + R_(2, 2) - 1.) * 0.5;
+        double theta = std::acos(std::min(std::max(acosV, -1.), 1.));
 
-    Eigen::Matrix3d quaternionToRotation(const Eigen::Vector4d &q);
+        w = Eigen::Vector3d(R_(2, 1) - R_(1, 2), R_(0, 2) - R_(2, 0), R_(1, 0) - R_(0, 1));
+        w *= sinc_inv(theta) * 0.5;
+
+        return w;
+    }
+    double sinc_inv(const double x)
+    {
+    constexpr double taylor_0_bound = std::numeric_limits<double>::epsilon();
+    constexpr double taylor_2_bound = std::sqrt(taylor_0_bound);
+    constexpr double taylor_n_bound = std::sqrt(taylor_2_bound);
+
+    // We use the 4th order taylor series around 0 of x/sin(x) to compute
+    // this function:
+    //
+    //     x^2  7x^4
+    // 1 + ── + ──── + O(x^6)
+    //     6    360
+    // this approximation is valid around 0.
+    // if x is far from 0, our approximation is not valid
+    // since x^6 becomes non neglectable we use the normal computation of the function
+    // (i.e. taylor_2_bound^6 + taylor_0_bound == taylor_0_bound but
+    //       taylor_n_bound^6 + taylor_0_bound != taylor_0).
+
+    if(std::abs(x) >= taylor_n_bound)
+    {
+        return (x / std::sin(x));
+    }
+    else
+    {
+        // x is bellow taylor_n_bound so we don't care of the 6th order term of
+        // the taylor series.
+        // We set the 0 order term.
+        double result = 1;
+
+        if(std::abs(x) >= taylor_0_bound)
+        {
+        // x is above the machine epsilon so x^2 is meaningful.
+        double x2 = x * x;
+        result += x2 / 6;
+
+        if(std::abs(x) >= taylor_2_bound)
+        {
+            // x is upper the machine sqrt(epsilon) so x^4 is meaningful.
+            result += 7 * (x2 * x2) /360;
+        }
+        }
+
+        return (result);
+    }
+    }
+
+
+
 
     Eigen::VectorXd inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask, double dt);
 

@@ -42,7 +42,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
         const std::string &jname = pmodel_->names[i];
         std::cout << "Joint Id: " << pmodel_->getJointId(jname) << " # " << pmodel_->idx_qs[pmodel_->getJointId(jname)] << " " << pmodel_->idx_vs[pmodel_->getJointId(jname)] << " Name: " << jname << std::endl;
         //Do not insert "universe" joint
-        if (jname.compare("universe") != 0 && jname.compare("root_joint")!=0)
+        if (jname.compare("universe") != 0 && jname.compare("root_joint") != 0)
         {
             jnames_.push_back(jname);
         }
@@ -79,7 +79,7 @@ pin_wrapper::pin_wrapper(const std::string &model_name, const bool &has_floating
     qdot_.setZero(pmodel_->nv);
     jointDataReceived = false;
 
-    lm_damping = 1e-2; 
+    lm_damping = 1e-3;
     gainC = 0.5;
 
     //Not used in QP
@@ -123,7 +123,7 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
 
     q_.setZero(pmodel_->nq);
     qdot_.setZero(pmodel_->nv);
-    
+
     jointDataReceived = true;
     mapJointNamesIDs(jnames, qvec, qdotvec);
 
@@ -146,12 +146,6 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
         qdot_[4] = omegawb(1); //y
         qdot_[5] = omegawb(2); //z
     }
-    // cout<<"input "<<endl;
-    // for(int i=0;i<qdotvec.size();i++)
-    //     cout<<" joint "<<i<<" name "<<jnames[i]<<" "<<qdotvec[i]<<endl;
-    // cout<<"output "<<endl;
-    // for(int i=0;i<qdotvec.size();i++)
-    //     cout<<" joint "<<i<<" name "<<jnames_[i]<<" "<<qdot_[i+6]<<endl;
 
     pinocchio::forwardKinematics(*pmodel_, *data_, q_, qdot_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
@@ -171,12 +165,6 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
     jointDataReceived = true;
     pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
-
-    // std::cout<<" LLeg "<<linkPosition("l_foot").transpose()<<std::endl;
-    // std::cout<<" RLeg "<<linkPosition("r_foot").transpose()<<std::endl;
-    // std::cout<<" Base "<<linkPosition("pelvis").transpose()<<std::endl;
-    // Eigen::Quaterniond qdes = linkOrientation("pelvis");
-    // std::cout<<" Base "<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
 }
 
 void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
@@ -184,8 +172,6 @@ void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
                                    const std::vector<double> &qdotvec)
 {
     //assert(qvec.size() == jnames.size() && qdotvec.size() == jnames.size());
-
-
 
     for (int i = 0; i < jnames.size(); i++)
     {
@@ -207,24 +193,42 @@ void pin_wrapper::mapJointNamesIDs(const std::vector<std::string> &jnames,
         }
     }
 }
-
-void pin_wrapper::getJointData(const std::vector<std::string> &jnames,
-                               std::vector<double> &qvec,
-                               std::vector<double> &qdotvec)
+std::vector<std::string> pin_wrapper::getJointNames()
 {
-    qvec.clear();
-    qdotvec.clear();
-    qvec.resize(jnames.size());
-    qdotvec.resize(jnames.size());
+       return jnames_;
+}
+void pin_wrapper::getJointData(const std::vector<std::string> &jnames,
+                               Eigen::VectorXd &qvec,
+                               Eigen::VectorXd &qdotvec)
+{
+    qdotvec.setZero();
+    qvec.setZero();
 
-    for (int i = 0; i < jnames_.size(); i++)
+    if (has_floating_base)
     {
-        int jidx = pmodel_->getJointId(jnames[i]);
-        int vidx = pmodel_->idx_vs[jidx];
-        int qidx = pmodel_->idx_qs[jidx];
+        qvec.head(7) = q_.head(7);
+        qdotvec.head(6) = qdot_.head(6);
+        for (int i = 0; i < jnames.size(); i++)
+        {
+            int jidx = pmodel_->getJointId(jnames[i]);
 
-        qvec[i] = q_[qidx];
-        qdotvec[i] = qdot_[vidx];
+            int vidx = pmodel_->idx_vs[jidx];
+            int qidx = pmodel_->idx_qs[jidx];
+            qdotvec[i + 6] = qdot_(vidx);
+            qvec[i + 7] = q_(qidx);
+        }
+    }
+    else
+    {
+
+        for (int i = 0; i < jnames.size(); i++)
+        {
+            int jidx = pmodel_->getJointId(jnames[i]);
+            int vidx = pmodel_->idx_vs[jidx];
+            int qidx = pmodel_->idx_qs[jidx];
+            qdotvec[i] = qdot_(vidx);
+            qvec[i] = q_(qidx);
+        }
     }
 }
 
@@ -243,7 +247,7 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
     qvec.clear();
     qdotvec.resize(jnames.size());
     qvec.resize(jnames.size());
-    for (int i = 0; i < jnames_.size(); i++)
+    for (int i = 0; i < jnames.size(); i++)
     {
         int jidx = pmodel_->getJointId(jnames[i]);
         int vidx = pmodel_->idx_vs[jidx];
@@ -252,7 +256,6 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
         qvec[i] = qd(qidx);
     }
 }
-
 
 void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
                                       Eigen::VectorXd &qvec,
@@ -261,32 +264,31 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
     qdotvec.setZero();
     qvec.setZero();
 
+    if (has_floating_base)
+    {
+        qvec.head(7) = qd.head(7);
+        qdotvec.head(6) = qdotd.head(6);
+        for (int i = 0; i < jnames.size(); i++)
+        {
+            int jidx = pmodel_->getJointId(jnames[i]);
+            int vidx = pmodel_->idx_vs[jidx];
+            int qidx = pmodel_->idx_qs[jidx];
+            qdotvec[i + 6] = qdotd(vidx);
+            qvec[i + 7] = qd(qidx);
+        }
+    }
+    else
+    {
 
-    if(has_floating_base)
-    {
-    qvec.head(7) = qd.head(7);
-    qdotvec.head(6) = qdotvec.head(6);
-    for (int i = 0; i < jnames.size(); i++)
-    {
-        int jidx = pmodel_->getJointId(jnames[i]);
-        int vidx = pmodel_->idx_vs[jidx];
-        int qidx = pmodel_->idx_qs[jidx];
-        qdotvec[i+6] = qdotd(vidx);
-        qvec[i+7] = qd(qidx);
+        for (int i = 0; i < jnames.size(); i++)
+        {
+            int jidx = pmodel_->getJointId(jnames[i]);
+            int vidx = pmodel_->idx_vs[jidx];
+            int qidx = pmodel_->idx_qs[jidx];
+            qdotvec[i] = qdotd(vidx);
+            qvec[i] = qd(qidx);
+        }
     }
-    }
-else
-{
-
-    for (int i = 0; i < jnames.size(); i++)
-    {
-        int jidx = pmodel_->getJointId(jnames[i]);
-        int vidx = pmodel_->idx_vs[jidx];
-        int qidx = pmodel_->idx_qs[jidx];
-        qdotvec[i] = qdotd(vidx);
-        qvec[i] = qd(qidx);
-    }
-}
 }
 
 double pin_wrapper::getQdotd(const std::string &jname) const
@@ -316,7 +318,6 @@ double pin_wrapper::getQ(const std::string &jname) const
     int qidx = pmodel_->idx_qs[jidx];
     return q_(qidx);
 }
-
 
 Eigen::MatrixXd pin_wrapper::geometricJacobian(const std::string &frame_name)
 {
@@ -403,7 +404,7 @@ Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
         pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
         lpose.head(3) = data_->oMf[link_number].translation();
         Eigen::Quaterniond tempQ = Eigen::Quaterniond(data_->oMf[link_number].rotation());
-        lpose.tail(4) = Eigen::Vector4d(tempQ.x(),tempQ.y(),tempQ.z(),tempQ.w());
+        lpose.tail(4) = Eigen::Vector4d(tempQ.x(), tempQ.y(), tempQ.z(), tempQ.w());
     }
     catch (const std::exception &e)
     {
@@ -433,9 +434,8 @@ Eigen::Vector3d pin_wrapper::logMap(
     if (temp_ > std::numeric_limits<double>::epsilon())
     {
         tempV *= (1.000 / temp_);
-        omega = tempV * (2.0 * acos(q.w() / temp));
-        //omega = tempV * (2.0 * atan2(temp_, q.w()));
-
+        //omega = tempV * (2.0 * acos(q.w() / temp));
+        omega = tempV * (2.0 * atan2(temp_, q.w()));
     }
     return omega;
 }
@@ -581,50 +581,6 @@ void pin_wrapper::printActualJointData() const
         std::cout << jnames_[i] << "\t\t\t" << getQ(jnames_[i]) << "\t\t\t\t" << getQdot(jnames_[i]) << std::endl;
 }
 
-// Eigen::Vector4d pin_wrapper::rotationToQuaternion(const Eigen::Matrix3d &R)
-// {
-//     double dEpsilon = 1e-6;
-//     Eigen::Vector4d quat;
-
-//     quat(0) = 0.5 * sqrt(R(0, 0) + R(1, 1) + R(2, 2) + 1.0);
-//     if (fabs(R(0, 0) - R(1, 1) - R(2, 2) + 1.0) < dEpsilon)
-//         quat(1) = 0.0;
-//     else
-//         quat(1) = 0.5 * sgn(R(2, 1) - R(1, 2)) * sqrt(R(0, 0) - R(1, 1) - R(2, 2) + 1.0);
-//     if (fabs(R(1, 1) - R(2, 2) - R(0, 0) + 1.0) < dEpsilon)
-//         quat(2) = 0.0;
-//     else
-//         quat(2) = 0.5 * sgn(R(0, 2) - R(2, 0)) * sqrt(R(1, 1) - R(2, 2) - R(0, 0) + 1.0);
-//     if (fabs(R(2, 2) - R(0, 0) - R(1, 1) + 1.0) < dEpsilon)
-//         quat(3) = 0.0;
-//     else
-//         quat(3) = 0.5 * sgn(R(1, 0) - R(0, 1)) * sqrt(R(2, 2) - R(0, 0) - R(1, 1) + 1.0);
-
-//     return quat;
-// }
-
-Eigen::Matrix3d pin_wrapper::quaternionToRotation(const Eigen::Vector4d &q)
-{
-    double normq = q.norm();
-    if (fabs(normq - 1.0) > 0.001)
-    {
-        std::cerr << "WARNING: Input quaternion is not unitary! ... "
-                  << "Returning identity" << std::endl;
-        return Eigen::Matrix3d::Identity();
-    }
-    Eigen::Matrix3d res;
-    res(0, 0) = 2.0 * (q(0) * q(0) + q(1) * q(1)) - 1.0;
-    res(0, 1) = 2.0 * (q(1) * q(2) - q(0) * q(3));
-    res(0, 2) = 2.0 * (q(1) * q(3) + q(0) * q(2));
-    res(1, 0) = 2.0 * (q(1) * q(2) + q(0) * q(3));
-    res(1, 1) = 2.0 * (q(0) * q(0) + q(2) * q(2)) - 1.0;
-    res(1, 2) = 2.0 * (q(2) * q(3) - q(0) * q(1));
-    res(2, 0) = 2.0 * (q(1) * q(3) - q(0) * q(2));
-    res(2, 1) = 2.0 * (q(2) * q(3) + q(0) * q(1));
-    res(2, 2) = 2.0 * (q(0) * q(0) + q(3) * q(3)) - 1.0;
-
-    return res;
-}
 
 void pin_wrapper::clearTasks()
 {
@@ -658,7 +614,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         pmeas = comPosition();
     }
     e = (pdes - pmeas);
-    vdes += gain * e / dt;
+    vdes = gain * e / dt;
 
     //Measured Link's Linear Velocity in the world frame;
 
@@ -666,11 +622,10 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     // cout<<"Frame \n"<<frame_name<<endl;
     // cout<<"des \n"<<pdes.transpose()<<endl;
     // cout<<"actual \n"<<pmeas.transpose()<<endl;
-    // cout<<"JACOBIAN \n"<<Jac<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, e.norm()) * I; //fmax(lm_damping, v.norm())
-    h -= 2.0*(weight * vdes.transpose() * Jac).transpose();
+    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, e.norm()) * I; //fmax(lm_damping, v.norm())
+    h -=  (weight * vdes.transpose() * Jac).transpose();
 }
 
 void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, Eigen::Vector3d wdes, Eigen::Quaterniond qdes, double weight, double gain, double dt)
@@ -691,25 +646,21 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
 
     //Orientation in World Frame
     Eigen::Quaterniond qmeas = linkOrientation(frame_name);
-
-    e = logMap(qdes * qmeas.inverse());
-    // v_d = Eigen::Vector3d(qdes.x(), qdes.y(), qdes.z());
-    // v_ = Eigen::Vector3d(qmeas.x(), qmeas.y(), qmeas.z());
-    // e = -(qdes.w() * v_ - qmeas.w() * v_d + wedge(v_d) * v_) ;
+    Eigen::Quaterniond resq = qdes * qmeas.inverse();
+    e = logMap(resq.toRotationMatrix());
     // cout<<"Frame \n"<<frame_name<<endl;
     // cout<<"des \n"<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
     // cout<<"actual \n"<< qmeas.x()<< qmeas.y() << qmeas.z() <<qmeas.w() << endl;
     // cout<<"error \n" <<e.transpose()<<endl;
     //Error in World Frame
-    wdes += gain * e / dt;
+    wdes = gain * e / dt;
     wmeas = Jac * qdot_;
-
 
     // cout<<"omega des \n"<< wdes.transpose() << endl;
     // cout<<"omega actual \n"<< wmeas.transpose() << endl;
     cost += (wdes - wmeas).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, e.norm()) * I; //fmax(lm_damping, v.norm())
-    h -= 2.0*(weight * wdes.transpose() * Jac).transpose();
+    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, e.norm()) * I; //fmax(lm_damping, v.norm())
+    h -=  (weight * wdes.transpose() * Jac).transpose();
 }
 void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, double qqdes, double weight, double gain, double dt)
 {
@@ -721,7 +672,7 @@ void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, doubl
     }
 
     Eigen::MatrixXd Jac;
-    double v, qq, qqdot;
+    double r, v, qq, qqdot;
     Jac.resize(1, pmodel_->nv);
     Jac.setZero();
 
@@ -730,16 +681,16 @@ void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, doubl
 
     Jac(0, vidx) = 1;
     qq = getQ(joint_name);
-    v = (qqdes - qq) / dt;
-
+    r = (qqdes - qq);
+    v = r/dt;
     qqdot = getQdot(joint_name);
     double cost__ = (qqdot - gain * v) * (qqdot - gain * v) * weight;
     cost += cost__;
 
     //std::cout<<"Joint "<<joint_name<<"Id "<<jidx<<" Data "<<qq<<" "<<qqdot<<" Des "<<qqdes<<" Cost "<<cost__<<std::endl;
 
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(lm_damping, fabs(v)) * I;
-    h -= 2.0*(weight * gain * v * Jac).transpose();
+    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, fabs(r)) * I;
+    h -=  (weight * gain * v * Jac).transpose();
 }
 
 void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask, double dt)
@@ -787,6 +738,15 @@ void pin_wrapper::setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d ome
     vwb = vwb_;
     omegawb = omegawb_;
 }
+Eigen::VectorXd pin_wrapper::getGeneralizedCoordinates()
+{
+    return q_;
+}
+
+Eigen::VectorXd pin_wrapper::getGeneralizedVelocities()
+{
+    return qdot_;
+}
 
 Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, std::vector<angularTask> atask, std::vector<dofTask> dtask, double dt)
 {
@@ -817,28 +777,22 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
 
     for (unsigned int i = ii; i < pmodel_->nv; ++i)
     {
-        lb(i) = lbq(i+1) > lbdq(i) ? lbq(i+1) : lbdq(i);
-        ub(i) = ubq(i+1) < ubdq(i) ? ubq(i+1) : ubdq(i);
+        lb(i) = lbq(i + 1) > lbdq(i) ? lbq(i + 1) : lbdq(i);
+        ub(i) = ubq(i + 1) < ubdq(i) ? ubq(i + 1) : ubdq(i);
     }
 
-    // cout<<"H "<<H<<endl;
-    // cout<<"h "<<h<<endl;
+
     //qdotd = H.colPivHouseholderQr().solve(-h);
-    
-    //qdotd = H.inverse()*h;
+    //qdotd = H.inverse()*(-h);
     // std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
-    //cholesky.compute(H);
-    //qdotd_ = cholesky.solve(-h);
-    //std::cout << "Unconstrained Optimal Solution" << qdotd << std::endl;
     //std::cout << "-----" << std::endl;
     //L_choleksy = Eigen::MatrixXd(cholesky.matrixL());
     //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
 
+
     //qmap form 1/2* x' H x + h' x
-    H *= 2.0;
     qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-    
-    //qdotd = H.colPivHouseholderQr().solve(-h);
+
     // std::cout<<"Optmization Velocity  ---"<<std::endl;
     // for (int i = 0; i < qdotd.size(); ++i)
     //     std::cout << qdotd[i] << std::endl;
