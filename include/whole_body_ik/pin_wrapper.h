@@ -49,7 +49,7 @@
 #include <Eigen/Cholesky>
 #include <whole_body_ik/LeakyIntegrator.h>
 using namespace std;
-
+using namespace Eigen;
 struct linearTask
 {
     std::string frame_name;
@@ -77,6 +77,52 @@ struct dofTask
     double weight;
     double gain;
 };
+
+struct humanoidTaskData
+{
+  VectorXd joint_states;
+  std::vector<std::string> joint_names;
+  Vector3d CoM_pos;
+  Vector3d CoM_vel;
+  Vector3d lfoot_pos;
+  Vector3d rfoot_pos;
+  Vector3d lhand_pos;
+  Vector3d rhand_pos;
+  Vector3d head_pos;
+  Vector3d lfoot_linear_vel;
+  Vector3d rfoot_linear_vel;
+  Vector3d lhand_linear_vel;
+  Vector3d rhand_linear_vel;
+  Vector3d head_linear_vel;
+  Vector3d lfoot_angular_vel;
+  Vector3d rfoot_angular_vel;
+  Vector3d lhand_angular_vel;
+  Vector3d rhand_angular_vel;
+  Vector3d head_angular_vel;
+  Vector3d base_pos;
+  Vector3d base_linear_vel;
+  Vector3d base_angular_vel;
+  Quaterniond base_orientation;
+  Quaterniond lfoot_orientation;
+  Quaterniond rfoot_orientation;
+  Quaterniond lhand_orientation;
+  Quaterniond rhand_orientation;
+  Quaterniond head_orientation;
+  std::string head_frame;
+  std::string lfoot_frame;
+  std::string rfoot_frame;
+  std::string lhand_frame;
+  std::string rhand_frame;
+  std::string base_frame;
+};
+
+
+
+
+
+
+
+
 class pin_wrapper
 {
 
@@ -156,13 +202,21 @@ public:
     void printDesiredJointData() const;
     void updateJointConfig(const std::vector<std::string> &jnames_,
                            const std::vector<double> &qvec,
-                           const std::vector<double> &qdotvec,
-                           double joint_std = 0);
+                           const std::vector<double> &qdotvec);
+                           
+    void updateJointConfig(const std::vector<std::string> &jnames_,
+                           const Eigen::VectorXd &qvec,
+                           const Eigen::VectorXd &qdotvec);
 
     void updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq);
     void mapJointNamesIDs(const std::vector<std::string> &jnames_,
                           const std::vector<double> &qvec,
                           const std::vector<double> &qdotvec);
+
+    void mapJointNamesIDs(const std::vector<std::string> &jnames_,
+                          const Eigen::VectorXd &qvec,
+                          const Eigen::VectorXd &qdotvec);
+    
     Eigen::VectorXd getGeneralizedCoordinates();
 
     Eigen::VectorXd getGeneralizedVelocities();
