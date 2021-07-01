@@ -54,18 +54,21 @@
   <build_depend>control_msgs</build_depend>
   <build_depend>actionlib</build_depend>
   <build_depend>whole_body_ik_msgs</build_depend>
+  <build_depend>lipm_control</build_depend>
 
   <build_export_depend>roscpp</build_export_depend>
   <build_export_depend>sensor_msgs</build_export_depend>
   <build_export_depend>control_msgs</build_export_depend>
   <build_export_depend>actionlib</build_export_depend>
   <build_export_depend>whole_body_ik_msgs</build_export_depend>
+  <build_export_depend>lipm_control</build_export_depend>
 
   <exec_depend>roscpp</exec_depend>
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>control_msgs</exec_depend>
   <exec_depend>actionlib</exec_depend>
   <exec_depend>whole_body_ik_msgs</exec_depend>
+  <exec_depend>lipm_control</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
