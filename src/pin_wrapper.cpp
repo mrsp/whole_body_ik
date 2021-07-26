@@ -264,8 +264,8 @@ void pin_wrapper::getJointData(const std::vector<std::string> &jnames,
                                Eigen::VectorXd &qvec,
                                Eigen::VectorXd &qdotvec)
 {
-    qdotvec.setZero();
-    qvec.setZero();
+    qdotvec.setZero(pmodel_->nv);
+    qvec.setZero(pmodel_->nq);
 
     if (has_floating_base)
     {
@@ -306,10 +306,12 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
                                       std::vector<double> &qvec,
                                       std::vector<double> &qdotvec)
 {
+
     qdotvec.clear();
     qvec.clear();
     qdotvec.resize(jnames.size());
     qvec.resize(jnames.size());
+
     for (int i = 0; i < jnames.size(); i++)
     {
         int jidx = pmodel_->getJointId(jnames[i]);
@@ -324,8 +326,8 @@ void pin_wrapper::getDesiredJointData(const std::vector<std::string> &jnames,
                                       Eigen::VectorXd &qvec,
                                       Eigen::VectorXd &qdotvec)
 {
-    qdotvec.setZero();
-    qvec.setZero();
+    qdotvec.setZero(pmodel_->nv);
+    qvec.setZero(pmodel_->nq);
 
     if (has_floating_base)
     {
@@ -845,6 +847,5 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //qmap form 1/2* x' H x + h' x
     qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
     qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
-
     return qdotd;
 }

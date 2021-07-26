@@ -1,0 +1,9 @@
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/nao.urdf"
+base_link_frame: "base_link"
+lfoot_frame: "l_sole"
+rfoot_frame: "r_sole"
+lhand_frame: "LHand"
+rhand_frame: "RHand"
+head_frame: "Head"
+control_frequency: 100
+desired_joint_state_topic: "/nao_raisim_ros/command_joint_states"
