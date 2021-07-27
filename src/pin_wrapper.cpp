@@ -146,7 +146,7 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
         qdot_[5] = omegawb(2); //z
     }
 
-    pinocchio::forwardKinematics(*pmodel_, *data_, q_, qdot_);
+    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 }
 
@@ -182,7 +182,7 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
         qdot_[5] = omegawb(2); //z
     }
 
-    pinocchio::forwardKinematics(*pmodel_, *data_, q_, qdot_);
+    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 }
 
@@ -191,11 +191,28 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
     q_.setZero(pmodel_->nq);
     qdot_.setZero(pmodel_->nv);
     q_ = q;
-
-    //cout<<"Joint Data Pre"<<q.transpose()<<endl;
-
-    //cout<<"Joint Data After"<<q_.transpose()<<endl;
     qdot_ = dq;
+
+    if (has_floating_base)
+    {
+        //position
+        q_[0] = pwb(0);
+        q_[1] = pwb(1);
+        q_[2] = pwb(2);
+        q_[3] = qwb.x(); //x
+        q_[4] = qwb.y(); //y
+        q_[5] = qwb.z(); //z
+        q_[6] = qwb.w(); //w
+
+        //Velocity
+        qdot_[0] = vwb(0);
+        qdot_[1] = vwb(1);
+        qdot_[2] = vwb(2);
+        qdot_[3] = omegawb(0); //x
+        qdot_[4] = omegawb(1); //y
+        qdot_[5] = omegawb(2); //z
+    }
+
 
     jointDataReceived = true;
     pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);

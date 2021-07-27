@@ -43,18 +43,14 @@ private:
     Quaterniond qwb;
 
     pin_wrapper *pin;
-
     void init();
 
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     ~nao_wbc();
     nao_wbc(ros::NodeHandle nh_);
-    void joint_stateCb(const sensor_msgs::JointStateConstPtr &msg);
-    void odomCb(const nav_msgs::OdometryConstPtr &msg);
     void run();
-    actionlib::SimpleActionServer<whole_body_ik_msgs::HumanoidAction> *as_; 
-    void controlCb(const whole_body_ik_msgs::HumanoidGoalConstPtr &msg);
+    void controlCb(Eigen::VectorXd& qd, const whole_body_ik_msgs::HumanoidGoal msg);
 
 void swapQuatWXYZ(Eigen::VectorXd &input_)
 {
