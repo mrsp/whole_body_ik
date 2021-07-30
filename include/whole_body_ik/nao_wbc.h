@@ -41,12 +41,14 @@ public:
     nao_wbc(ros::NodeHandle nh_);
     void run();
     void controlCb(Eigen::VectorXd& qd, Eigen::VectorXd& dqd, const whole_body_ik_msgs::HumanoidGoal msg);
+    void ActionServercontrolCb(const whole_body_ik_msgs::HumanoidGoalConstPtr msg);
     Vector3d getDesiredLLegPosition();
     Vector3d getDesiredRLegPosition();
     Quaterniond getDesiredLLegOrientation();
     Quaterniond getDesiredRLegOrientation();
     pin_wrapper  *desired_pin;
     Eigen::VectorXd jointNominalConfig, jointNominalVelocity;
+    actionlib::SimpleActionServer<whole_body_ik_msgs::HumanoidAction> *as_; 
 void swapQuatWXYZ(Eigen::VectorXd &input_)
 {
   Eigen::VectorXd tmp(input_.size());

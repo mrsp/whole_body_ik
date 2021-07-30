@@ -71,17 +71,11 @@ SET(nao_raisim_cpp_src
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 
-add_executable(whole_body_ik_node ${talos_cpp_src})
-
-
+add_executable(whole_body_ik_node ${nao_raisim_cpp_src})
 target_link_libraries(whole_body_ik_node ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 target_compile_definitions(whole_body_ik_node PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
 add_dependencies(whole_body_ik_node  ${catkin_EXPORTED_TARGETS})
 
-
-#add_library(lipm_control src/main.cpp src/control.cpp src/RobotParameters.cpp src/postureStabilizer.cpp src/ZMPDistributor.cpp src/FootPolygon.cpp)
-#add_dependencies(lipm_control ${catkin_EXPORTED_TARGETS})
-#target_link_libraries(lipm_control ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES})
 
 add_library(whole_body_ik ${nao_raisim_cpp_src})
 target_link_libraries(whole_body_ik ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
