@@ -4,7 +4,7 @@ talos::talos(ros::NodeHandle nh_)
 {
     nh = nh_;
     ros::NodeHandle n_p("~");
-    n_p.param<std::string>("modelname", modelname, "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf");
+    n_p.param<std::string>("modelname", modelname, "../share/urdf/talos_full_v2.urdf");
     n_p.param<std::string>("base_link", base_link_frame, "base_link");
     n_p.param<std::string>("left_sole_link", lfoot_frame, "left_sole_link");
     n_p.param<std::string>("right_sole_link", rfoot_frame, "right_sole_link");

@@ -13,7 +13,7 @@ nao_wbc::nao_wbc(ros::NodeHandle nh_)
 {
     nh = nh_;
     ros::NodeHandle n_p("~");
-    n_p.param<std::string>("modelname", modelname, "/home/master/catkin_ws/src/whole_body_ik/share/urdf/nao.urdf");
+    n_p.param<std::string>("modelname", modelname, "../share/urdf/nao.urdf");
     n_p.param<std::string>("base_link_frame", base_link_frame, "base_link");
     n_p.param<std::string>("lfoot_frame", lfoot_frame, "l_sole");
     n_p.param<std::string>("rfoot_frame", rfoot_frame, "r_sole");
