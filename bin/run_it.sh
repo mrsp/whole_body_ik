@@ -27,6 +27,9 @@ WORKNAME="whole_body_ik"
 #Bin name has actually a _node postfix
 BINNAME="whole_body_ik_node"
 
+echo "Running from : `pwd`"
+echo "Workspace directory is : $ROOT_ROS_WORKSPACE"
+
 PATHOFBIN="$ROOT_ROS_WORKSPACE/devel/lib/$WORKNAME/$BINNAME"
 if [ -e $PATHOFBIN ]
 then
