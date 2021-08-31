@@ -846,8 +846,8 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
 
     clearTasks();
     addTasks(ltask, atask, dtask, dt);
-    lbq = gainC * (qmin_ - q_) / dt;
-    ubq = gainC * (qmax_ - q_) / dt;
+    lbq =  (qmin_ - q_) / dt;
+    ubq =  (qmax_ - q_) / dt;
 
     for (unsigned int i = ii; i < pmodel_->nv; ++i)
     {

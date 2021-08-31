@@ -47,7 +47,6 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <Eigen/Cholesky>
-#include <whole_body_ik/LeakyIntegrator.h>
 using namespace std;
 using namespace Eigen;
 struct linearTask

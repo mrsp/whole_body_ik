@@ -57,14 +57,12 @@ link_directories(${PINOCCHIO_LIBRARY_DIRS})
 SET(talos_cpp_src
     src/whole_body_ik_talos_driver.cpp 
     src/talos.cpp
-    src/LeakyIntegrator.cpp
     src/pin_wrapper.cpp
 )
 
 SET(nao_raisim_cpp_src
     src/whole_body_ik_nao_raisim_driver.cpp 
     src/nao_wbc.cpp
-    src/LeakyIntegrator.cpp
     src/pin_wrapper.cpp
 )
 ## Declare a C++ executable
