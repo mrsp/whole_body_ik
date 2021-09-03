@@ -148,6 +148,7 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
 
     pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
+
 }
 
 
@@ -155,7 +156,6 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
                                     const Eigen::VectorXd &qvec,
                                     const Eigen::VectorXd &qdotvec)
 {
-
     q_.setZero(pmodel_->nq);
     qdot_.setZero(pmodel_->nv);
 
@@ -181,8 +181,8 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
         qdot_[4] = omegawb(1); //y
         qdot_[5] = omegawb(2); //z
     }
-
-    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+    pinocchio::forwardKinematics(*pmodel_,*data_,q_,qdot_);
+    pinocchio::updateFramePlacements(*pmodel_, *data_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 }
 
@@ -215,7 +215,7 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
 
 
     jointDataReceived = true;
-    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+    pinocchio::framesForwardKinematics(*pmodel_,*data_,q_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 }
 
@@ -696,13 +696,13 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         pmeas = comPosition();
     }
     e = (pdes - pmeas);
-    vdes = gain * e / dt;
+    vdes = gain * e;
 
     //Measured Link's Linear Velocity in the world frame;
     vmeas = Jac * qdot_;
     // cout<<"Frame \n"<<frame_name<<endl;
-    // cout<<"des \n"<<pdes.transpose()<<endl;
-    // cout<<"actual \n"<<pmeas.transpose()<<endl;
+    // cout<<"des \n"<<vdes.transpose()<<endl;
+    // cout<<"actual \n"<<vmeas.transpose()<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, e.norm()) * I; //fmax(lm_damping, v.norm())
@@ -729,13 +729,18 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     Eigen::Quaterniond qmeas = linkOrientation(frame_name);
     Eigen::Quaterniond resq = qdes * qmeas.inverse();
     e = logMap(resq.toRotationMatrix());
+    //cout<<"error \n" <<e.transpose()<<endl;
+
+    //e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
+    // cout<<"error 2\n" <<e.transpose()<<endl;
+
     // cout<<"Frame \n"<<frame_name<<endl;
     // cout<<"des \n"<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
     // cout<<"actual \n"<< qmeas.x()<< qmeas.y() << qmeas.z() <<qmeas.w() << endl;
     // cout<<"error \n" <<e.transpose()<<endl;
     
     //Error in World Frame
-    wdes = gain * e / dt;
+    wdes = gain * e;
     wmeas = Jac * qdot_;
 
     // cout<<"omega des \n"<< wdes.transpose() << endl;
@@ -771,7 +776,7 @@ void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, doubl
 
     //std::cout<<"Joint "<<joint_name<<"Id "<<jidx<<" Data "<<qq<<" "<<qqdot<<" Des "<<qqdes<<" Cost "<<cost__<<std::endl;
 
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, fabs(r)) * I;
+    H += weight * Jac.transpose() * Jac; // + lm_damping * fmax(1.0e-3, r*r) * I;
     h -=  (weight * gain * v * Jac).transpose();
 }
 
@@ -797,7 +802,7 @@ void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTas
 }
 void pin_wrapper::addReguralization()
 {
-    H += I * 2.2e-6;
+    H += I * 2.2e-3;
 }
 
 void pin_wrapper::setBaseToWorldTransform(Eigen::Affine3d Twb_)
@@ -839,12 +844,18 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         return qdot_;
     }
 
+    if(!initialized)
+    {
+        qd = q_;
+        initialized = true;
+    }
     jointDataReceived = false;
     int ii = 0;
     if (has_floating_base)
         ii = 6;
 
     clearTasks();
+    //addReguralization();
     addTasks(ltask, atask, dtask, dt);
     lbq =  (qmin_ - q_) / dt;
     ubq =  (qmax_ - q_) / dt;
@@ -863,6 +874,6 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
     //qmap form 1/2* x' H x + h' x
     qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-    qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
+    qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
     return qdotd;
 }
