@@ -701,11 +701,12 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     //Measured Link's Linear Velocity in the world frame;
     vmeas = Jac * qdot_;
     // cout<<"Frame \n"<<frame_name<<endl;
-    // cout<<"des \n"<<vdes.transpose()<<endl;
-    // cout<<"actual \n"<<vmeas.transpose()<<endl;
+    // cout<<"des \n"<<pdes.transpose()<<endl;
+    // cout<<"actual \n"<<pmeas.transpose()<<endl;
+    // cout<<"weight "<<weight<<" gain "<<gain<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, e.norm()) * I; //fmax(lm_damping, v.norm())
+    H += weight * Jac.transpose() * Jac; // + lm_damping * fmax(1.0e-3, e.norm()) * I; 
     h -=  (weight * vdes.transpose() * Jac).transpose();
 }
 
@@ -728,10 +729,10 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //Orientation in World Frame
     Eigen::Quaterniond qmeas = linkOrientation(frame_name);
     Eigen::Quaterniond resq = qdes * qmeas.inverse();
-    e = logMap(resq.toRotationMatrix());
+    //e = logMap(resq.toRotationMatrix());
     //cout<<"error \n" <<e.transpose()<<endl;
 
-    //e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
+    e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
     // cout<<"error 2\n" <<e.transpose()<<endl;
 
     // cout<<"Frame \n"<<frame_name<<endl;
@@ -802,7 +803,7 @@ void pin_wrapper::addTasks(std::vector<linearTask> ltask, std::vector<angularTas
 }
 void pin_wrapper::addReguralization()
 {
-    H += I * 2.2e-3;
+    H += I * 1.0e-6;
 }
 
 void pin_wrapper::setBaseToWorldTransform(Eigen::Affine3d Twb_)
@@ -855,7 +856,7 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
         ii = 6;
 
     clearTasks();
-    //addReguralization();
+    addReguralization();
     addTasks(ltask, atask, dtask, dt);
     lbq =  (qmin_ - q_) / dt;
     ubq =  (qmax_ - q_) / dt;
