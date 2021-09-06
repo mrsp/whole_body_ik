@@ -696,7 +696,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
         pmeas = comPosition();
     }
     e = (pdes - pmeas);
-    vdes = gain * e;
+    vdes = gain * e /dt;
 
     //Measured Link's Linear Velocity in the world frame;
     vmeas = Jac * qdot_;
@@ -706,7 +706,7 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     // cout<<"weight "<<weight<<" gain "<<gain<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac  + lm_damping * fmax(1.0e-3, e.norm()) * I; 
+    H += weight * Jac.transpose() * Jac  + lm_damping * vdes.norm() * I; 
     h -=  (weight * vdes.transpose() * Jac).transpose();
 }
 
@@ -729,14 +729,14 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //Orientation in World Frame
     Eigen::Quaterniond qmeas = linkOrientation(frame_name);
     Eigen::Quaterniond resq = qdes * qmeas.inverse();
-    // e = logMap(resq.toRotationMatrix());
+    e = logMap(resq.toRotationMatrix());
 
     // //e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
     // cout<<"error \n" <<e.transpose()<<endl;
 
-    Vector3d vdes =  Vector3d(qdes.x(),qdes.y(),qdes.z());
-    Vector3d vmeas = Vector3d(qmeas.x(),qmeas.y(),qmeas.z());
-    e = - (qdes.w()* vmeas - qmeas.w() * vdes + vdes.cross(vmeas));
+    //Vector3d vdes =  Vector3d(qdes.x(),qdes.y(),qdes.z());
+    //Vector3d vmeas = Vector3d(qmeas.x(),qmeas.y(),qmeas.z());
+    //e = - (qdes.w()* vmeas - qmeas.w() * vdes + vdes.cross(vmeas));
     //cout<<"error 2\n" <<e.transpose()<<endl;
 
     // cout<<"Frame \n"<<frame_name<<endl;
@@ -745,13 +745,13 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     // cout<<"error \n" <<e.transpose()<<endl;
     
     //Error in World Frame
-    wdes = gain * e;
+    wdes = gain * e / dt;
     wmeas = Jac * qdot_;
 
     // cout<<"omega des \n"<< wdes.transpose() << endl;
     // cout<<"omega actual \n"<< wmeas.transpose() << endl;
     cost += (wdes - wmeas).squaredNorm() * weight;
-    H += weight * Jac.transpose() * Jac + lm_damping * fmax(1.0e-3, e.norm()) * I; 
+    H += weight * Jac.transpose() * Jac + lm_damping * wdes.norm() * I; 
     h -=  (weight * wdes.transpose() * Jac).transpose();
 }
 void pin_wrapper::setDOFTask(const std::string &joint_name, int task_type, double qqdes, double weight, double gain, double dt)
@@ -879,6 +879,6 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
     //qmap form 1/2* x' H x + h' x
     qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-    qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
+    qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
     return qdotd;
 }
