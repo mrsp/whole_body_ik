@@ -46,6 +46,10 @@ public:
     Vector3d getDesiredRLegPosition();
     Quaterniond getDesiredLLegOrientation();
     Quaterniond getDesiredRLegOrientation();
+    Quaterniond getDesiredLHandOrientation();
+    Quaterniond getDesiredRHandOrientation();
+    Quaterniond getDesiredHeadOrientation();
+
     pin_wrapper  *desired_pin;
     Eigen::VectorXd jointNominalConfig, jointNominalVelocity;
     actionlib::SimpleActionServer<whole_body_ik_msgs::HumanoidAction> *as_; 

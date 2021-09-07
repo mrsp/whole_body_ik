@@ -55,6 +55,21 @@ Quaterniond nao_wbc::getDesiredRLegOrientation()
 {
     return desired_pin->linkOrientation(rfoot_frame);
 }
+
+
+Quaterniond nao_wbc::getDesiredLHandOrientation()
+{
+    return desired_pin->linkOrientation(lhand_frame);
+}
+Quaterniond nao_wbc::getDesiredRHandOrientation()
+{
+    return desired_pin->linkOrientation(rhand_frame);
+}
+Quaterniond nao_wbc::getDesiredHeadOrientation()
+{
+    return desired_pin->linkOrientation(head_frame);
+}
+
 void nao_wbc::run()
 {
     ros::spin();
@@ -387,7 +402,7 @@ void nao_wbc::controlCb(Eigen::VectorXd &qd, Eigen::VectorXd& dqd, const whole_b
         ataskVec.push_back(atask);
     }
 
-    // //Head Linear + Angular task
+    //Head Linear + Angular task
     // if (msg.Head.linear_task.weight > 0 && msg.Head.linear_task.gain > 0)
     // {
     //     ltask.frame_name = head_frame;
@@ -452,6 +467,7 @@ void nao_wbc::controlCb(Eigen::VectorXd &qd, Eigen::VectorXd& dqd, const whole_b
     //     atask.task_type = 1;
     //     ataskVec.push_back(atask);
     // }
+
 
     pin->inverseKinematics(ltaskVec, ataskVec, dtaskVec, msg.dt);
     pin->getDesiredJointData(msg.joint_state.name, qd, dqd);

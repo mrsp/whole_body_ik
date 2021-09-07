@@ -146,7 +146,8 @@ void pin_wrapper::updateJointConfig(const std::vector<std::string> &jnames,
         qdot_[5] = omegawb(2); //z
     }
 
-    pinocchio::framesForwardKinematics(*pmodel_, *data_, q_);
+    pinocchio::forwardKinematics(*pmodel_,*data_,q_,qdot_);
+    pinocchio::updateFramePlacements(*pmodel_, *data_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 
 }
@@ -215,7 +216,8 @@ void pin_wrapper::updateJointConfig(Eigen::VectorXd q, Eigen::VectorXd dq)
 
 
     jointDataReceived = true;
-    pinocchio::framesForwardKinematics(*pmodel_,*data_,q_);
+    pinocchio::forwardKinematics(*pmodel_,*data_,q_,qdot_);
+    pinocchio::updateFramePlacements(*pmodel_, *data_);
     pinocchio::computeJointJacobians(*pmodel_, *data_, q_);
 }
 
@@ -526,15 +528,14 @@ Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
 
     pinocchio::Data::Matrix6x J(6, ndofActuated());
     J.fill(0);
-
     if (has_floating_base)
     {
         try
         {
             // Jacobian in pinocchio::WORLD frame
             pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::WORLD, J);
-            return J.topRows(3);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+           return Rwb * (data_->oMf[link_number].rotation()) * J.topRows(3);
         }
         catch (std::exception &e)
         {
@@ -551,7 +552,7 @@ Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
             pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
             pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
             // Transform Jacobian from pinocchio::LOCAL frame to base frame
-            return (data_->oMf[link_number].rotation()) * J.topRows(3);
+           return  (data_->oMf[link_number].rotation()) * J.topRows(3);
         }
         catch (std::exception &e)
         {
@@ -572,8 +573,8 @@ Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
         {
             pinocchio::Model::FrameIndex link_number = pmodel_->getFrameId(frame_name);
             // Jacobian in pinocchio::WORLD frame
-            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::WORLD, J);
-            return J.bottomRows(3);
+            pinocchio::getFrameJacobian(*pmodel_, *data_, link_number, pinocchio::LOCAL, J);
+            return Rwb*(data_->oMf[link_number].rotation()) * J.bottomRows(3);
         }
         catch (std::exception &e)
         {
@@ -603,19 +604,14 @@ Eigen::MatrixXd pin_wrapper::angularJacobian(const std::string &frame_name)
 
 Eigen::VectorXd pin_wrapper::comPosition()
 {
-    Eigen::Vector3d com;
     pinocchio::centerOfMass(*pmodel_, *data_, q_);
-    com = data_->com[0];
-    return com;
+    return data_->com[0];
 }
 
 Eigen::MatrixXd pin_wrapper::comJacobian() const
 {
-    Eigen::MatrixXd Jcom;
-    Jcom.setZero(3, pmodel_->nv);
     pinocchio::jacobianCenterOfMass(*pmodel_, *data_, q_);
-    Jcom = data_->Jcom;
-    return Jcom;
+    return data_->Jcom;
 }
 
 Eigen::VectorXd pin_wrapper::comVelocity()
@@ -700,10 +696,10 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
 
     //Measured Link's Linear Velocity in the world frame;
     vmeas = Jac * qdot_;
-    // cout<<"Frame \n"<<frame_name<<endl;
-    // cout<<"des \n"<<pdes.transpose()<<endl;
-    // cout<<"actual \n"<<pmeas.transpose()<<endl;
-    // cout<<"weight "<<weight<<" gain "<<gain<<endl;
+    cout<<"Linear Frame \n"<<frame_name<<endl;
+    cout<<"des \n"<<pdes.transpose()<<endl;
+    cout<<"actual \n"<<pmeas.transpose()<<endl;
+    //cout<<"weight "<<weight<<" gain "<<gain<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
     H += weight * Jac.transpose() * Jac  + lm_damping * vdes.norm() * I; 
@@ -731,7 +727,7 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     Eigen::Quaterniond resq = qdes * qmeas.inverse();
     e = logMap(resq.toRotationMatrix());
 
-    // //e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
+    // e = rotationError(qdes.toRotationMatrix(), qmeas.toRotationMatrix());
     // cout<<"error \n" <<e.transpose()<<endl;
 
     //Vector3d vdes =  Vector3d(qdes.x(),qdes.y(),qdes.z());
@@ -739,10 +735,10 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //e = - (qdes.w()* vmeas - qmeas.w() * vdes + vdes.cross(vmeas));
     //cout<<"error 2\n" <<e.transpose()<<endl;
 
-    // cout<<"Frame \n"<<frame_name<<endl;
-    // cout<<"des \n"<< qdes.x()<< qdes.y() << qdes.z() <<qdes.w() << endl;
-    // cout<<"actual \n"<< qmeas.x()<< qmeas.y() << qmeas.z() <<qmeas.w() << endl;
-    // cout<<"error \n" <<e.transpose()<<endl;
+    cout<<"Angular Frame \n"<<frame_name<<endl;
+    cout<<"des \n"<< qdes.x()<<" "<< qdes.y() <<" "<< qdes.z() << " "<<qdes.w() << endl;
+    cout<<"actual \n"<< qmeas.x()<<" "<< qmeas.y() <<" "<< qmeas.z() <<" "<<qmeas.w() << endl;
+    cout<<"error \n" <<e.transpose()<<endl;
     
     //Error in World Frame
     wdes = gain * e / dt;
@@ -822,6 +818,9 @@ void pin_wrapper::setBaseToWorldState(Eigen::Vector3d pwb_, Eigen::Quaterniond q
 {
     qwb = qwb_;
     pwb = pwb_;
+    Rwb = qwb_.toRotationMatrix();
+    Twb.translation() = pwb;
+    Twb.linear() = Rwb;
 }
 
 void pin_wrapper::setBaseWorldVelocity(Eigen::Vector3d vwb_, Eigen::Vector3d omegawb_)
@@ -879,6 +878,6 @@ Eigen::VectorXd pin_wrapper::inverseKinematics(std::vector<linearTask> ltask, st
     //qpmad::Solver::ReturnStatus status = solver.solve(qdotd, L_choleksy, h, lb, ub, A, Alb, Aub, solver_params);
     //qmap form 1/2* x' H x + h' x
     qpmad::Solver::ReturnStatus status = solver.solve(qdotd, H, h, lb, ub);
-    qd = pinocchio::integrate(*pmodel_, qd, qdotd * dt);
+    qd = pinocchio::integrate(*pmodel_, q_, qdotd * dt);
     return qdotd;
 }
