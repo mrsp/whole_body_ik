@@ -386,6 +386,32 @@ public:
             return -1.0;
     }
 
+    /** @brief Computes the logarithmic map for a component in SO(3) group
+       *  @param q Quaternion in SO(3) group
+       *  @return   3D twist in so(3) algebra
+       */
+    inline Eigen::Vector3d logMap(
+        Eigen::Quaterniond &q)
+    {
+
+        Eigen::Vector3d omega;
+        omega = Eigen::Vector3d::Zero();
+
+        double temp = q.norm();
+
+        Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
+
+        double temp_ = tempV.norm();
+        if (temp_ > std::numeric_limits<double>::epsilon())
+        {
+            tempV *= (1.000 / temp_);
+            //omega = tempV * (2.0 * acos(q.w() / temp));
+            omega = tempV * (2.0 * atan2(temp_, q.w()));
+        }
+        return omega;
+    }
+
+
     inline Eigen::Vector3d logMap(const Eigen::Matrix3d &R_)
     {
         Eigen::Vector3d w;

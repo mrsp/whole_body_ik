@@ -499,30 +499,7 @@ Eigen::VectorXd pin_wrapper::linkPose(const std::string &frame_name)
     return lpose;
 }
 
-/** @brief Computes the logarithmic map for a component in SO(3) group
-	 *  @param q Quaternion in SO(3) group
-	 *  @return   3D twist in so(3) algebra
-	 */
-Eigen::Vector3d pin_wrapper::logMap(
-    Eigen::Quaterniond q)
-{
 
-    Eigen::Vector3d omega;
-    omega = Eigen::Vector3d::Zero();
-
-    double temp = q.norm();
-
-    Eigen::Vector3d tempV = Eigen::Vector3d(q.x(), q.y(), q.z());
-
-    double temp_ = tempV.norm();
-    if (temp_ > std::numeric_limits<double>::epsilon())
-    {
-        tempV *= (1.000 / temp_);
-        //omega = tempV * (2.0 * acos(q.w() / temp));
-        omega = tempV * (2.0 * atan2(temp_, q.w()));
-    }
-    return omega;
-}
 Eigen::MatrixXd pin_wrapper::linearJacobian(const std::string &frame_name)
 {
 
@@ -695,10 +672,10 @@ void pin_wrapper::setLinearTask(const std::string &frame_name, int task_type, Ei
     vdes = gain * e /dt;
 
     //Measured Link's Linear Velocity in the world frame;
-    vmeas = Jac * qdot_;
-    cout<<"Linear Frame \n"<<frame_name<<endl;
-    cout<<"des \n"<<pdes.transpose()<<endl;
-    cout<<"actual \n"<<pmeas.transpose()<<endl;
+    // vmeas = Jac * qdot_;
+    // cout<<"Linear Frame \n"<<frame_name<<endl;
+    // cout<<"des \n"<<pdes.transpose()<<endl;
+    // cout<<"actual \n"<<pmeas.transpose()<<endl;
     //cout<<"weight "<<weight<<" gain "<<gain<<endl;
 
     cost += (vmeas - vdes).squaredNorm() * weight;
@@ -735,10 +712,10 @@ void pin_wrapper::setAngularTask(const std::string &frame_name, int task_type, E
     //e = - (qdes.w()* vmeas - qmeas.w() * vdes + vdes.cross(vmeas));
     //cout<<"error 2\n" <<e.transpose()<<endl;
 
-    cout<<"Angular Frame \n"<<frame_name<<endl;
-    cout<<"des \n"<< qdes.x()<<" "<< qdes.y() <<" "<< qdes.z() << " "<<qdes.w() << endl;
-    cout<<"actual \n"<< qmeas.x()<<" "<< qmeas.y() <<" "<< qmeas.z() <<" "<<qmeas.w() << endl;
-    cout<<"error \n" <<e.transpose()<<endl;
+    // cout<<"Angular Frame \n"<<frame_name<<endl;
+    // cout<<"des \n"<< qdes.x()<<" "<< qdes.y() <<" "<< qdes.z() << " "<<qdes.w() << endl;
+    // cout<<"actual \n"<< qmeas.x()<<" "<< qmeas.y() <<" "<< qmeas.z() <<" "<<qmeas.w() << endl;
+    // cout<<"error \n" <<e.transpose()<<endl;
     
     //Error in World Frame
     wdes = gain * e / dt;
