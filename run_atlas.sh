@@ -15,7 +15,7 @@ cd "$DIR"
 
 
 cd bin
-./run_it.sh $@
+./run_atlas.sh $@
 cd ..
 
 cd "$STARTDIR"

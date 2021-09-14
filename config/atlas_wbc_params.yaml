@@ -1,0 +1,8 @@
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/atlas.urdf"
+base_link_frame: "pelvis"
+lfoot_frame: "l_foot"
+rfoot_frame: "r_foot"
+lhand_frame: "l_arm_wry2"
+rhand_frame: "r_arm_wry2"
+head_frame: "neck_ry"
+desired_joint_state_topic: "/atlas_raisim_ros/command_joint_states"

@@ -54,14 +54,12 @@ include_directories(
 link_directories(${PINOCCHIO_LIBRARY_DIRS})
 
 ## CPP source files
-SET(talos_cpp_src
-    src/whole_body_ik_talos_driver.cpp 
-    src/talos.cpp
+SET(atlas_raisim_cpp_src
+    src/atlas_wbc.cpp
     src/pin_wrapper.cpp
 )
 
 SET(nao_raisim_cpp_src
-    src/whole_body_ik_nao_raisim_driver.cpp 
     src/nao_wbc.cpp
     src/pin_wrapper.cpp
 )
@@ -69,19 +67,20 @@ SET(nao_raisim_cpp_src
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 
-add_executable(whole_body_ik_node ${nao_raisim_cpp_src})
-target_link_libraries(whole_body_ik_node ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
-target_compile_definitions(whole_body_ik_node PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
-add_dependencies(whole_body_ik_node  ${catkin_EXPORTED_TARGETS})
+add_executable(whole_body_ik_node_nao src/whole_body_ik_nao_raisim_driver.cpp  ${nao_raisim_cpp_src})
+target_link_libraries(whole_body_ik_node_nao ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
+target_compile_definitions(whole_body_ik_node_nao PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
+add_dependencies(whole_body_ik_node_nao  ${catkin_EXPORTED_TARGETS})
 
 
-add_library(whole_body_ik ${nao_raisim_cpp_src})
+
+add_executable(whole_body_ik_node_atlas  src/whole_body_ik_atlas_raisim_driver.cpp  ${atlas_raisim_cpp_src})
+target_link_libraries(whole_body_ik_node_atlas ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
+target_compile_definitions(whole_body_ik_node_atlas PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
+add_dependencies(whole_body_ik_node_atlas  ${catkin_EXPORTED_TARGETS})
+
+
+add_library(whole_body_ik ${nao_raisim_cpp_src} ${atlas_raisim_cpp_src})
 target_link_libraries(whole_body_ik ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 target_compile_definitions(whole_body_ik PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
 add_dependencies(whole_body_ik  ${catkin_EXPORTED_TARGETS})
-
-
-
-
-
-

@@ -6,6 +6,3 @@ lhand_frame: "LHand"
 rhand_frame: "RHand"
 head_frame: "Head"
 desired_joint_state_topic: "/nao_raisim_ros/command_joint_states"
-
-
-
