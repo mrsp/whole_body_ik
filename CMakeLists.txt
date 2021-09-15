@@ -54,33 +54,26 @@ include_directories(
 link_directories(${PINOCCHIO_LIBRARY_DIRS})
 
 ## CPP source files
-SET(atlas_raisim_cpp_src
-    src/atlas_wbc.cpp
+SET(humanoid_cpp_src
+    src/humanoid_wbc.cpp
     src/pin_wrapper.cpp
 )
 
-SET(nao_raisim_cpp_src
-    src/nao_wbc.cpp
-    src/pin_wrapper.cpp
-)
+
+
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
 
-add_executable(whole_body_ik_node_nao src/whole_body_ik_nao_raisim_driver.cpp  ${nao_raisim_cpp_src})
-target_link_libraries(whole_body_ik_node_nao ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
-target_compile_definitions(whole_body_ik_node_nao PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
-add_dependencies(whole_body_ik_node_nao  ${catkin_EXPORTED_TARGETS})
 
 
+add_executable(whole_body_ik_node_humanoid  src/whole_body_ik_humanoid_driver.cpp  ${humanoid_cpp_src})
+target_link_libraries(whole_body_ik_node_humanoid ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
+target_compile_definitions(whole_body_ik_node_humanoid PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
+add_dependencies(whole_body_ik_node_humanoid  ${catkin_EXPORTED_TARGETS})
 
-add_executable(whole_body_ik_node_atlas  src/whole_body_ik_atlas_raisim_driver.cpp  ${atlas_raisim_cpp_src})
-target_link_libraries(whole_body_ik_node_atlas ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
-target_compile_definitions(whole_body_ik_node_atlas PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
-add_dependencies(whole_body_ik_node_atlas  ${catkin_EXPORTED_TARGETS})
 
-
-add_library(whole_body_ik ${nao_raisim_cpp_src} ${atlas_raisim_cpp_src})
+add_library(whole_body_ik ${humanoid_cpp_src})
 target_link_libraries(whole_body_ik ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${PINOCCHIO_LIBRARIES})
 target_compile_definitions(whole_body_ik PRIVATE ${PINOCCHIO_CFLAGS_OTHER})
 add_dependencies(whole_body_ik  ${catkin_EXPORTED_TARGETS})
