@@ -1,0 +1,10 @@
+modelname: "../share/urdf/robot.urdf"
+base_link_frame: "base_link"
+lfoot_frame: "l_leg"
+rfoot_frame: "r_leg"
+lhand_frame: "l_hand"
+rhand_frame: "r_hand"
+head_frame: "head"
+desired_joint_state_topic: "/robot/command_joint_states"
+ndof: 29
+jointNominalConfig: [0.03, 0,0.88 , 1 ,  0 , 0,0, 0, 0.000, 0, 0 , -1.57,  0  , 0,0,0,0,0,1.57 ,0,0,0,0 ,0, 0 , 0, -0.47,  0.90,   -0.43, 0, 0 ,0 ,-0.47, 0.90,  -0.43, 0] #This is the Standing Still Posture
