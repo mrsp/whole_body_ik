@@ -23,7 +23,7 @@ These instructions will get you a copy of the project up and running on your loc
 * Specify topics on config/humanoid_wbc_params.yaml
 * roslaunch whole_body_ik humanoid_wbc.launch
 
-### Whole-body Control for the Atlas humanoid robot
+### Whole-body Control for NAO and Atlas humanoid robots
 [![YouTube Link](img/atlasWBC.png)  ](https://www.youtube.com/watch?v=NjRICIC1yZE)
 
 ## License
