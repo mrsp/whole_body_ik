@@ -25,6 +25,7 @@ These instructions will get you a copy of the project up and running on your loc
 
 ### Whole-body Control for NAO and Atlas humanoid robots
 [![YouTube Link](img/atlasWBC.png)  ](https://www.youtube.com/watch?v=NjRICIC1yZE)
+[![YouTube Link](img/atlasWALK.png)  ](https://www.youtube.com/watch?v=Q8YF8RGbtac)
 
 ## License
 [BSD](LICENSE) 
