@@ -1,5 +1,5 @@
-modelname: "../share/urdf/atlas.urdf"
-base_link_frame: "utorso"
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/atlas.urdf"
+base_link_frame: "back_bkz"
 lfoot_frame: "l_leg_akx"
 rfoot_frame: "r_leg_akx"
 lhand_frame: "l_arm_wry2"
