@@ -1,4 +1,4 @@
-modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/atlas.urdf"
+modelname: "/home/michael/raisim_ros/src/whole_body_ik/share/urdf/atlas.urdf"
 base_link_frame: "back_bkz"
 lfoot_frame: "l_leg_akx"
 rfoot_frame: "r_leg_akx"
