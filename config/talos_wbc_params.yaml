@@ -1,5 +1,5 @@
-modelname: "/home/michael/raisim_ros/src/whole_body_ik/share/urdf/talos_full_v2.urdf"
-base_link_frame: "base_link"
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf"
+base_link_frame: "torso_1_link"
 lfoot_frame: "left_sole_link"
 rfoot_frame: "right_sole_link"
 lhand_frame: "arm_left_7_link"
@@ -7,4 +7,10 @@ rhand_frame: "arm_right_7_link"
 head_frame: "head_1_link"
 desired_joint_state_topic: "/talos_raisim_ros/command_joint_states"
 ndof: 44
-jointNominalConfig: [0, 0, 1.02,1,0,0,0,  0,0, 0, 0, 0.25847, 0.173046, -0.0002, -0.525366, 0, 0, 0.1, 0,0,0,0,0,0,0, -0.25847,  -0.173046, 0.0002, -0.525366, 0, 0, 0.1, 0,0,0,0,0,0,0, 0.0, 0.000,  -0.4,  0.8, -0.4, 0,  0.0, 0.00,  -0.4,  0.8, -0.4, 0]
+jointNominalConfig: [0, 0, 1.0246,1,0,0,0, 0,0, 0, 0.0,
+  0.25847, 0.173046, -0.0002, -0.525366, 0, 0, 0.1,
+  0,0,0,0,0,0,0,
+-0.25847,  -0.173046, 0.0002, -0.525366, 0, 0, 0.1,
+  0,0,0,0,0,0,0,
+ 0.0, 0.05,  -0.4,  0.8, -0.4, -0.05, 
+ 0.0, -0.05,  -0.4,  0.8, -0.4, 0.05]
