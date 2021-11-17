@@ -1,5 +1,5 @@
 modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/talos_full_v2.urdf"
-base_link_frame: "torso_1_link"
+base_link_frame: "base_link"
 lfoot_frame: "left_sole_link"
 rfoot_frame: "right_sole_link"
 lhand_frame: "arm_left_7_link"
