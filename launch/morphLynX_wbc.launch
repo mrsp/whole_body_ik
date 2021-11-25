@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<launch>
+<node pkg="whole_body_ik" type="run_humanoid.sh" name="whole_body_ik"  respawn="false" output="screen">
+   	 <rosparam file="$(find whole_body_ik)/config/morphLynX_wbc_params.yaml" command="load"/> 
+</node> 
+</launch>

@@ -1,0 +1,7 @@
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/morphLynX.urdf"
+base_link_frame: "base_link"
+lfoot_frame: "L-FOOT"
+rfoot_frame: "R-FOOT"
+desired_joint_state_topic: "/morphLynX_raisim_ros/command_joint_states"
+ndof: 15
+jointNominalConfig: [0, 0, 0.168433660906, 1, 0, 0, 0, 0,0,0,0,0,0,0,0,0,0,0,0,0,0]

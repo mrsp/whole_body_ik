@@ -1,4 +1,4 @@
-modelname: "/home/michael/raisim_ros/src/whole_body_ik/share/urdf/nao.urdf"
+modelname: "/home/master/catkin_ws/src/whole_body_ik/share/urdf/nao.urdf"
 base_link_frame: "base_link"
 lfoot_frame: "l_sole"
 rfoot_frame: "r_sole"
