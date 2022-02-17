@@ -1,0 +1,10 @@
+modelname: "/home/master/catkin_ws/src/raisim_ros/rsc/digit/digit.urdf"
+base_link_frame: "torso"
+lfoot_frame: "left_toe_roll"
+rfoot_frame: "right_toe_roll"
+lhand_frame: "left_elbow"
+rhand_frame: "right_elbow"
+head_frame: "torso"
+desired_joint_state_topic: "/digit_raisim_ros/command_joint_states"
+ndof: 28
+jointNominalConfig: [0, 0, 0.9196, 1,  0, 0, 0, 0.375, 0, 0.115, 0,0,0,0,0,0, 0.8,0,0.5,0,-0.375,0,-0.115,0,0,0,0,0,0,-0.8,0,-0.5,0,0]
